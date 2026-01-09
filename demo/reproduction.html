@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Minimal WebApp Hardware Bridge Reproduction</title>
+</head>
+<body>
+    <h1>Minimal Print Test</h1>
+    <button onclick="printTest()">Print Sample PDF</button>
+    <button onclick="printReceipt()">Print Receipt (ESC/POS)</button>
+    <div id="status">Connecting...</div>
+
+    <script src="escpos-encoder.js"></script>
+    <script>
+        // Minimal WebSocket wrapper
+        const wsUrl = "ws://127.0.0.1:12212/printer";
+        const ws = new WebSocket(wsUrl);
+
+        ws.onopen = () => {
+            document.getElementById('status').innerText = "Connected to Bridge";
+            console.log("Connected");
+        };
+
+        ws.onclose = () => {
+            document.getElementById('status').innerText = "Disconnected";
+            console.log("Disconnected");
+        };
+
+        ws.onmessage = (evt) => {
+            console.log("Message from server:", evt.data);
+        };
+
+        window.printTest = function() {
+            if (ws.readyState === WebSocket.OPEN) {
+                const job = {
+                    'type': 'INVOICE', // Matches the keys defined in the Bridge settings
+                    'url': 'https://pdfobject.com/pdf/sample.pdf'
+                };
+                ws.send(JSON.stringify(job));
+                alert("Print job sent!");
+            } else {
+                alert("WebSocket is not connected.");
+            }
+        };
+
+        window.printReceipt = function() {
+            if (ws.readyState === WebSocket.OPEN) {
+                // Use the helper to generate commands
+                const encoder = new EscPosEncoder();
+                const base64Data = encoder
+                    .initialize()
+                    .text("Hello WebApp Bridge!")
+                    .newline()
+                    .text("Date: " + new Date().toLocaleString())
+                    .newline()
+                    .newline()
+                    .text("--------------------------------")
+                    .newline()
+                    .text("Item 1              $10.00")
+                    .newline()
+                    .text("Item 2              $20.00")
+                    .newline()
+                    .text("Total               $30.00")
+                    .newline()
+                    .newline()
+                    .newline()
+                    .cut()
+                    .toBase64();
+
+                const job = {
+                    'type': 'RECEIPT', 
+                    'raw_content': base64Data
+                };
+                ws.send(JSON.stringify(job));
+                alert("Receipt job sent!");
+            } else {
+                alert("WebSocket is not connected.");
+            }
+        };
+    </script>
+</body>
+</html>

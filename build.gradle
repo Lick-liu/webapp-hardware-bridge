@@ -6,8 +6,8 @@ plugins {
 group 'webapp-hardware-bridge'
 version '1.0.1'
 
-sourceCompatibility = '21'
-targetCompatibility = '21'
+sourceCompatibility = '17'
+targetCompatibility = '17'
 
 repositories {
     mavenCentral()

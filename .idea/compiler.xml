@@ -12,6 +12,6 @@
         <module name="webapp-hardware-bridge.main" />
       </profile>
     </annotationProcessing>
-    <bytecodeTargetLevel target="21" />
+    <bytecodeTargetLevel target="17" />
   </component>
 </project>

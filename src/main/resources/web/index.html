@@ -1,10 +1,10 @@
 <!doctype html>
 <!--suppress JSUnusedGlobalSymbols, HtmlFormInputWithoutLabel, JSUnresolvedReference -->
-<html lang="en" xmlns: xmlns:@vue>
+<html lang="zh-CN" xmlns: xmlns:@vue>
 <head>
     <meta charset="utf-8">
     <meta content="width=device-width,initial-scale=1" name="viewport">
-    <title>WebApp Hardware Bridge Web UI</title>
+    <title>WebApp 硬件桥接配置</title>
     <link href="css/bootstrap.min.css" rel="stylesheet">
 </head>
 <body>
@@ -12,10 +12,10 @@
     <div class="container">
         <header class="d-flex flex-wrap justify-content-center py-3 mb-4 border-bottom">
             <a class="d-flex align-items-center mb-3 mb-md-0 me-md-auto link-body-emphasis text-decoration-none" href="#">
-                <span class="fs-4">WebApp Hardware Bridge Web UI</span>
+                <span class="fs-4">WebApp 硬件桥接配置</span>
             </a>
-            <button @click="saveConfig" class="btn btn-success ms-2">Save</button>
-            <button @click="restartServer" class="btn btn-warning ms-2">Restart Server</button>
+            <button @click="saveConfig" class="btn btn-success ms-2">保存配置</button>
+            <button @click="restartServer" class="btn btn-warning ms-2">重启服务</button>
         </header>
     </div>
     <div class="container" v-if="config != null">
@@ -23,10 +23,10 @@
             <div class="mb-2 col-xl-4">
                 <div class="card mb-2">
                     <div class="card-body">
-                        <h5 class="card-title mb-3">GUI</h5>
+                        <h5 class="card-title mb-3">界面设置 (GUI)</h5>
 
                         <div class="form-group row mb-2">
-                            <label class="col-sm-10" for="gui-notification-enabled">Enable notification</label>
+                            <label class="col-sm-10" for="gui-notification-enabled">启用系统通知</label>
                             <div class="col-sm-2 text-end">
                                 <input class="form-check-input" id="gui-notification-enabled" type="checkbox" v-model="config.gui.notification.enabled"/>
                             </div>
@@ -36,40 +36,40 @@
 
                 <div class="card mb-2">
                     <div class="card-body">
-                        <h5 class="card-title mb-3">Web/WebSocket Server</h5>
+                        <h5 class="card-title mb-3">Web/WebSocket 服务</h5>
 
                         <div class="form-group row mb-2">
-                            <label class="col-sm-4" for="server-bind">Bind</label>
+                            <label class="col-sm-4" for="server-bind">绑定 IP</label>
                             <div class="col-sm-8">
                                 <input class="form-control form-control-sm" id="server-bind" type="text" v-model="config.server.bind"/>
                             </div>
                         </div>
 
                         <div class="form-group row mb-2">
-                            <label class="col-sm-4" for="server-address">Address</label>
+                            <label class="col-sm-4" for="server-address">外部访问地址</label>
                             <div class="col-sm-8">
                                 <input class="form-control form-control-sm" id="server-address" type="text" v-model="config.server.address"/>
                             </div>
                         </div>
 
                         <div class="form-group row mb-2">
-                            <label class="col-sm-4" for="server-port">Port</label>
+                            <label class="col-sm-4" for="server-port">监听端口</label>
                             <div class="col-sm-8">
                                 <input class="form-control form-control-sm" id="server-port" max="65535" min="1024" type="number" v-model="config.server.port"/>
                             </div>
                         </div>
 
                         <div class="form-group row mb-2">
-                            <label class="col-sm-10" for="server-authentication-enabled">Enable authentication</label>
+                            <label class="col-sm-10" for="server-authentication-enabled">启用安全认证</label>
                             <div class="col-sm-2 text-end">
                                 <input class="form-check-input" id="server-authentication-enabled" type="checkbox" v-model="config.server.authentication.enabled"/>
                             </div>
                         </div>
 
                         <div class="card mb-2" v-if="config.server.authentication.enabled">
-                            <div class="card-body"><h6 class="card-title mb-3">Authentication</h6>
+                            <div class="card-body"><h6 class="card-title mb-3">认证详情</h6>
                                 <div class="form-group row mb-2">
-                                    <label class="col-sm-4" for="server-authentication-token">Token</label>
+                                    <label class="col-sm-4" for="server-authentication-token">访问令牌 (Token)</label>
                                     <div class="col-sm-8">
                                         <input class="form-control form-control-sm" id="server-authentication-token" type="text" v-model="config.server.authentication.token"/>
                                     </div>
@@ -78,37 +78,37 @@
                         </div>
 
                         <div class="form-group row mb-2">
-                            <label class="col-sm-10" for="server-tls-enabled">Enable TLS</label>
+                            <label class="col-sm-10" for="server-tls-enabled">启用 TLS (HTTPS/WSS)</label>
                             <div class="col-sm-2 text-end">
                                 <input class="form-check-input" id="server-tls-enabled" type="checkbox" v-model="config.server.tls.enabled"/>
                             </div>
                         </div>
 
                         <div class="card mb-2" v-if="config.server.tls.enabled">
-                            <div class="card-body"><h6 class="card-title mb-3">TLS</h6>
+                            <div class="card-body"><h6 class="card-title mb-3">TLS 配置</h6>
                                 <div class="form-group row mb-2">
-                                    <label class="col-sm-4" for="server-tls-self-signed">Self Signed</label>
+                                    <label class="col-sm-4" for="server-tls-self-signed">使用自签名证书</label>
                                     <div class="col-sm-8">
                                         <input class="form-check-input" id="server-tls-self-signed" type="checkbox" v-model="config.server.tls.selfSigned"/>
                                     </div>
                                 </div>
 
                                 <div class="form-group row mb-2">
-                                    <label class="col-sm-4" for="server-tls-cert">Cert</label>
+                                    <label class="col-sm-4" for="server-tls-cert">证书路径 (Cert)</label>
                                     <div class="col-sm-8">
                                         <input class="form-control form-control-sm" id="server-tls-cert" type="text" v-model="config.server.tls.cert"/>
                                     </div>
                                 </div>
 
                                 <div class="form-group row mb-2">
-                                    <label class="col-sm-4" for="server-tls-key">Key</label>
+                                    <label class="col-sm-4" for="server-tls-key">密钥路径 (Key)</label>
                                     <div class="col-sm-8">
                                         <input class="form-control form-control-sm" id="server-tls-key" type="text" v-model="config.server.tls.key"/>
                                     </div>
                                 </div>
 
                                 <div class="form-group row mb-2">
-                                    <label class="col-sm-4" for="server-tls-ca-bundle">CA Bundle</label>
+                                    <label class="col-sm-4" for="server-tls-ca-bundle">CA 证书包</label>
                                     <div class="col-sm-8">
                                         <input class="form-control form-control-sm" id="server-tls-ca-bundle" type="text" v-model="config.server.tls.caBundle"/>
                                     </div>
@@ -120,24 +120,24 @@
 
                 <div class="card">
                     <div class="card-body">
-                        <h5 class="card-title mb-3">Downloader</h5>
+                        <h5 class="card-title mb-3">下载器设置</h5>
 
                         <div class="form-group row mb-2">
-                            <label class="col-sm-4" for="downloader-path">Path</label>
+                            <label class="col-sm-4" for="downloader-path">临时保存路径</label>
                             <div class="col-sm-8">
                                 <input class="form-control form-control-sm" id="downloader-path" type="text" v-model="config.downloader.path"/>
                             </div>
                         </div>
 
                         <div class="form-group row mb-2">
-                            <label class="col-sm-4" for="downloader-timeout">Timeout</label>
+                            <label class="col-sm-4" for="downloader-timeout">超时时间 (ms)</label>
                             <div class="col-sm-8">
                                 <input class="form-control form-control-sm" id="downloader-timeout" type="number" v-model="config.downloader.timeout"/>
                             </div>
                         </div>
 
                         <div class="form-group row mb-2">
-                            <label class="col-sm-10" for="downloader-ignore-tls-certificate-error">Ignore TLS certificate error</label>
+                            <label class="col-sm-10" for="downloader-ignore-tls-certificate-error">忽略 TLS 证书错误</label>
                             <div class="col-sm-2 text-end">
                                 <input class="form-check-input" id="downloader-ignore-tls-certificate-error" type="checkbox" v-model="config.downloader.ignoreTLSCertificateError"/>
                             </div>
@@ -151,28 +151,28 @@
                 <div class="card">
                     <div class="card-body">
                         <h5 class="card-title mb-3">
-                            Printers
+                            打印机设置
                             <button @click="addPrinter" class="btn btn-sm btn-success float-end">+</button>
                         </h5>
 
                         <div class="clearfix pb-3"></div>
 
                         <div class="form-group row mb-2">
-                            <label class="col-sm-10" for="printer-enabled">Enabled</label>
+                            <label class="col-sm-10" for="printer-enabled">启用打印功能</label>
                             <div class="col-sm-2 text-end">
                                 <input class="form-check-input" id="printer-enabled" type="checkbox" v-model="config.printer.enabled"/>
                             </div>
                         </div>
 
                         <div class="form-group row mb-2">
-                            <label class="col-sm-10" for="printer-auto-add-unknown-type">Auto add unknown type</label>
+                            <label class="col-sm-10" for="printer-auto-add-unknown-type">自动添加未知类型</label>
                             <div class="col-sm-2 text-end">
                                 <input class="form-check-input" id="printer-auto-add-unknown-type" type="checkbox" v-model="config.printer.autoAddUnknownType"/>
                             </div>
                         </div>
 
                         <div class="form-group row mb-2">
-                            <label class="col-sm-10" for="printer-fallback-to-default">Fallback to default printer if none matched</label>
+                            <label class="col-sm-10" for="printer-fallback-to-default">未匹配时使用默认打印机</label>
                             <div class="col-sm-2 text-end">
                                 <input class="form-check-input" id="printer-fallback-to-default" type="checkbox" v-model="config.printer.fallbackToDefault"/>
                             </div>
@@ -181,19 +181,19 @@
                         <div class="card mb-2" v-for="(printer, index) in config.printer.mappings">
                             <div class="card-body">
                                 <h5 class="card-title mb-3">
-                                    Printer {{ index + 1 }} <span v-if="printer.type">({{ printer.type }})</span>
+                                    打印机 {{ index + 1 }} <span v-if="printer.type">({{ printer.type }})</span>
                                     <button @click="removePrinter(index)" class="btn btn-sm btn-danger float-end">-</button>
                                 </h5>
 
                                 <div class="form-group row mb-2">
-                                    <label class="col-sm-4">Type</label>
+                                    <label class="col-sm-4">业务类型 (Type)</label>
                                     <div class="col-sm-8">
                                         <input class="form-control form-control-sm" type="text" v-model="printer.type"/>
                                     </div>
                                 </div>
 
                                 <div class="form-group row mb-2">
-                                    <label class="col-sm-4">Printer Name</label>
+                                    <label class="col-sm-4">物理打印机</label>
                                     <div class="col-sm-8">
                                         <select class="form-control form-control-sm" type="text" v-model="printer.name">
                                             <option :value="printerSelection.name" v-for="printerSelection in printers">{{ printerSelection.name }}</option>
@@ -202,21 +202,21 @@
                                 </div>
 
                                 <div class="form-group row mb-2">
-                                    <label class="col-sm-10">Auto rotate</label>
+                                    <label class="col-sm-10">自动旋转 (PDF)</label>
                                     <div class="col-sm-2 text-end">
                                         <input class="form-check-input" type="checkbox" v-model="printer.autoRotate"/>
                                     </div>
                                 </div>
 
                                 <div class="form-group row mb-2">
-                                    <label class="col-sm-10">Reset imageable area</label>
+                                    <label class="col-sm-10">重置可打印区域</label>
                                     <div class="col-sm-2 text-end">
                                         <input class="form-check-input" type="checkbox" v-model="printer.resetImageableArea"/>
                                     </div>
                                 </div>
 
                                 <div class="form-group row mb-2">
-                                    <label class="col-sm-4">Force DPI</label>
+                                    <label class="col-sm-4">强制 DPI</label>
                                     <div class="col-sm-8">
                                         <input class="form-control form-control-sm" type="number" v-model="printer.forceDPI"/>
                                     </div>
@@ -231,14 +231,14 @@
                 <div class="card">
                     <div class="card-body">
                         <h5 class="card-title mb-3">
-                            Serials
+                            串口设置
                             <button @click="addSerial" class="btn btn-sm btn-success float-end">+</button>
                         </h5>
 
                         <div class="clearfix pb-3"></div>
 
                         <div class="form-group row mb-2">
-                            <label class="col-sm-10" for="printer-enabled">Enabled</label>
+                            <label class="col-sm-10" for="serial-enabled">启用串口功能</label>
                             <div class="col-sm-2 text-end">
                                 <input class="form-check-input" id="serial-enabled" type="checkbox" v-model="config.serial.enabled"/>
                             </div>
@@ -247,19 +247,19 @@
                         <div class="card mb-2" v-for="(serial, index) in config.serial.mappings">
                             <div class="card-body">
                                 <h5 class="card-title mb-3">
-                                    Serial {{ index + 1 }} <span v-if="serial.type">({{ serial.type }})</span>
+                                    串口 {{ index + 1 }} <span v-if="serial.type">({{ serial.type }})</span>
                                     <button @click="removeSerial(index)" class="btn btn-sm btn-danger float-end">-</button>
                                 </h5>
 
                                 <div class="form-group row mb-2">
-                                    <label class="col-sm-4">Type</label>
+                                    <label class="col-sm-4">业务类型 (Type)</label>
                                     <div class="col-sm-8">
                                         <input class="form-control form-control-sm" type="text" v-model="serial.type"/>
                                     </div>
                                 </div>
 
                                 <div class="form-group row mb-2">
-                                    <label class="col-sm-4">Serial Port</label>
+                                    <label class="col-sm-4">端口号</label>
                                     <div class="col-sm-8">
                                         <select class="form-control form-control-sm" type="text" v-model="serial.name">
                                             <option :value="serial.name" v-for="serial in serials">{{ serial.name }}</option>
@@ -268,35 +268,35 @@
                                 </div>
 
                                 <div class="form-group row mb-2">
-                                    <label class="col-sm-4">Baud Rate</label>
+                                    <label class="col-sm-4">波特率 (Baud Rate)</label>
                                     <div class="col-sm-8">
                                         <input class="form-control form-control-sm" type="number" v-model="serial.baudRate"/>
                                     </div>
                                 </div>
 
                                 <div class="form-group row mb-2">
-                                    <label class="col-sm-4">Data Bits</label>
+                                    <label class="col-sm-4">数据位 (Data Bits)</label>
                                     <div class="col-sm-8">
                                         <input class="form-control form-control-sm" type="number" v-model="serial.numDataBits"/>
                                     </div>
                                 </div>
 
                                 <div class="form-group row mb-2">
-                                    <label class="col-sm-4">Stop Bits</label>
+                                    <label class="col-sm-4">停止位 (Stop Bits)</label>
                                     <div class="col-sm-8">
                                         <input class="form-control form-control-sm" type="number" v-model="serial.numStopBits"/>
                                     </div>
                                 </div>
 
                                 <div class="form-group row mb-2">
-                                    <label class="col-sm-4">Parity</label>
+                                    <label class="col-sm-4">校验位 (Parity)</label>
                                     <div class="col-sm-8">
                                         <input class="form-control form-control-sm" type="number" v-model="serial.parity"/>
                                     </div>
                                 </div>
 
                                 <div class="form-group row mb-2">
-                                    <label class="col-sm-4">Read Charset</label>
+                                    <label class="col-sm-4">读取字符集</label>
                                     <div class="col-sm-8">
                                         <select class="form-control form-control-sm" type="text" v-model="serial.readCharset">
                                             <option :value="charset" v-for="charset in ['UTF-8', 'US-ASCII', 'BINARY']">{{ charset }}</option>
@@ -305,7 +305,7 @@
                                 </div>
 
                                 <div class="form-group row mb-2">
-                                    <label class="col-sm-10">Read Multi-bytes</label>
+                                    <label class="col-sm-10">启用多字节读取</label>
                                     <div class="col-sm-2 text-end">
                                         <input class="form-check-input" type="checkbox" v-model="serial.readMultipleBytes"/>
                                     </div>
