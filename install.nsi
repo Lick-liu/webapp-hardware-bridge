@@ -1,8 +1,10 @@
+Unicode true
+
 ; The name of the installer
-Name "WebApp Hardware Bridge"
+Name "茶坊村本地打印助手"
 
 ; The file to write
-OutFile "whb.exe"
+OutFile "茶坊村本地打印助手.exe"
 
 ; The default installation directory
 InstallDir "$LOCALAPPDATA\WebApp Hardware Bridge"
@@ -45,21 +47,17 @@ Section "!Main Application" ;No components page, name is not important
   
   ; Delete shortcuts  
   Delete "$DESKTOP\WebApp Hardware Bridge.lnk"
-  Delete "$DESKTOP\WebApp Hardware Bridge (CLI).lnk"
   Delete "$SMPROGRAMS\WebApp Hardware Bridge.lnk"
-  Delete "$SMPROGRAMS\WebApp Hardware Bridge (CLI).lnk"
   
   ; Create shortcuts
-  CreateShortcut "$DESKTOP\WebApp Hardware Bridge.lnk" "$INSTDIR\jre\bin\javaw.exe" '-cp ".;webapp-hardware-bridge.jar;*" tigerworkshop.webapphardwarebridge.GUI' "$INSTDIR\icon.ico" 0
-  CreateShortcut "$DESKTOP\WebApp Hardware Bridge (CLI).lnk" "$INSTDIR\jre\bin\java.exe" '-cp ".;webapp-hardware-bridge.jar;*" tigerworkshop.webapphardwarebridge.Server' "$INSTDIR\icon.ico" 0
-  CreateShortcut "$SMPROGRAMS\WebApp Hardware Bridge.lnk" "$INSTDIR\jre\bin\javaw.exe" '-cp ".;webapp-hardware-bridge.jar;*" tigerworkshop.webapphardwarebridge.GUI' "$INSTDIR\icon.ico" 0
-  CreateShortcut "$SMPROGRAMS\WebApp Hardware Bridge (CLI).lnk" "$INSTDIR\jre\bin\java.exe" '-cp ".;webapp-hardware-bridge.jar;*" tigerworkshop.webapphardwarebridge.Server' "$INSTDIR\icon.ico" 0
+  CreateShortcut "$DESKTOP\茶坊村本地打印助手.lnk" "$INSTDIR\jre\bin\javaw.exe" '-cp ".;webapp-hardware-bridge.jar;*" tigerworkshop.webapphardwarebridge.GUI' "$INSTDIR\icon.ico" 0
+  CreateShortcut "$SMPROGRAMS\茶坊村本地打印助手.lnk" "$INSTDIR\jre\bin\javaw.exe" '-cp ".;webapp-hardware-bridge.jar;*" tigerworkshop.webapphardwarebridge.GUI' "$INSTDIR\icon.ico" 0
 
   ; Write the installation path into the registry
   WriteRegStr HKCU "SOFTWARE\WebApp Hardware Bridge" "Install_Dir" "$INSTDIR"
   
   ; Write the uninstall keys for Windows
-  WriteRegStr HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\WebApp Hardware Bridge" "DisplayName" "WebApp Hardware Bridge"
+  WriteRegStr HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\WebApp Hardware Bridge" "DisplayName" "茶坊村本地打印助手"
   WriteRegStr HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\WebApp Hardware Bridge" "UninstallString" '"$INSTDIR\uninstall.exe"'
   WriteRegDWORD HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\WebApp Hardware Bridge" "NoModify" 1
   WriteRegDWORD HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\WebApp Hardware Bridge" "NoRepair" 1
@@ -70,7 +68,7 @@ Section "!Main Application" ;No components page, name is not important
 SectionEnd ; end the section
 
 Section "Auto-start" autostart
-  CreateShortcut "$SMSTARTUP\WebApp Hardware Bridge.lnk" "$INSTDIR\jre\bin\javaw.exe" '-cp ".;webapp-hardware-bridge.jar;*" tigerworkshop.webapphardwarebridge.GUI'
+  CreateShortcut "$SMSTARTUP\茶坊村本地打印助手.lnk" "$INSTDIR\jre\bin\javaw.exe" '-cp ".;webapp-hardware-bridge.jar;*" tigerworkshop.webapphardwarebridge.GUI'
 SectionEnd
 
 Section "Uninstall"
@@ -79,15 +77,13 @@ Section "Uninstall"
   DeleteRegKey HKCU "SOFTWARE\WebApp Hardware Bridge"
   
   ; Delete shortcuts
-  Delete "$DESKTOP\WebApp Hardware Bridge.lnk"
-  Delete "$DESKTOP\WebApp Hardware Bridge (CLI).lnk"
-  Delete "$SMPROGRAMS\WebApp Hardware Bridge.lnk"
-  Delete "$SMPROGRAMS\WebApp Hardware Bridge (CLI).lnk"
+  Delete "$DESKTOP\茶坊村本地打印助手.lnk"
+  Delete "$SMPROGRAMS\茶坊村本地打印助手.lnk"
   
   ; Remove files and uninstaller
   RMDir /r $INSTDIR
 SectionEnd
 
 Function .onInstSuccess
-  ExecShell "" "$DESKTOP\WebApp Hardware Bridge.lnk"
+  ExecShell "" "$DESKTOP\茶坊村本地打印助手.lnk"
 FunctionEnd

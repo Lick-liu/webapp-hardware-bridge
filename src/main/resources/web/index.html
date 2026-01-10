@@ -4,7 +4,7 @@
 <head>
     <meta charset="utf-8">
     <meta content="width=device-width,initial-scale=1" name="viewport">
-    <title>WebApp 硬件桥接配置</title>
+    <title>茶坊村本地打印助手配置</title>
     <link href="css/bootstrap.min.css" rel="stylesheet">
 </head>
 <body>
@@ -12,7 +12,7 @@
     <div class="container">
         <header class="d-flex flex-wrap justify-content-center py-3 mb-4 border-bottom">
             <a class="d-flex align-items-center mb-3 mb-md-0 me-md-auto link-body-emphasis text-decoration-none" href="#">
-                <span class="fs-4">WebApp 硬件桥接配置</span>
+                <span class="fs-4">茶坊村本地打印助手配置</span>
             </a>
             <button @click="saveConfig" class="btn btn-success ms-2">保存配置</button>
             <button @click="restartServer" class="btn btn-warning ms-2">重启服务</button>
@@ -336,7 +336,7 @@ createApp({
             .then(response => this.config = response.data)
     },
     addPrinter() {
-        this.config.printer.mappings.push({type: '', name: ''})
+        this.config.printer.mappings.push({type: 'RECEIPT', name: ''})
     },
     removePrinter(index) {
         this.config.printer.mappings.splice(index, 1)
