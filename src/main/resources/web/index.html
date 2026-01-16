@@ -11,9 +11,10 @@
 <div @vue:mounted="mounted" v-scope>
     <div class="container">
         <header class="d-flex flex-wrap justify-content-center py-3 mb-4 border-bottom">
-            <a class="d-flex align-items-center mb-3 mb-md-0 me-md-auto link-body-emphasis text-decoration-none" href="#">
-                <span class="fs-4">茶坊村本地打印助手配置</span>
-            </a>
+            <div class="d-flex align-items-center mb-3 mb-md-0 me-md-auto">
+                <span class="fs-4 link-body-emphasis">茶坊村本地打印助手配置</span>
+                <a class="link-body-emphasis text-decoration-none ms-3" href="https://www.teahouses.cn/" rel="noopener noreferrer" target="_blank">收银系统就找茶坊村</a>
+            </div>
             <button @click="saveConfig" class="btn btn-success ms-2">保存配置</button>
             <button @click="restartServer" class="btn btn-warning ms-2">重启服务</button>
         </header>

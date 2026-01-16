@@ -25,3 +25,5 @@
 1. Start application
    - GUI: `javaw -cp webapp-hardware-bridge.jar tigerworkshop.webapphardwarebridge.GUI`
    - Server: `java -cp webapp-hardware-bridge.jar tigerworkshop.webapphardwarebridge.Server`
+
+ 打包命令  & "C:\Program Files (x86)\NSIS\makensis.exe" -INPUTCHARSET UTF8 install.nsi
