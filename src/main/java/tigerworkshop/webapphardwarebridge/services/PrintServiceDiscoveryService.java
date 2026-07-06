@@ -11,6 +11,8 @@ import java.awt.print.PrinterJob;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
@@ -27,13 +29,17 @@ public class PrintServiceDiscoveryService {
     private static final PrintServiceDiscoveryService instance = new PrintServiceDiscoveryService(
             PrinterJob::lookupPrintServices,
             () -> PrintServiceLookup.lookupPrintServices(null, null),
-            new PowerShellWindowsPrinterLookup(),
+            Arrays.asList(
+                    new PowerShellWindowsPrinterLookup(),
+                    new PowerShellGetPrinterLookup(),
+                    new PowerShellRegistryPrinterLookup()
+            ),
             () -> System.getProperty("os.name", "")
     );
 
     private final PrintServiceLookupSource printerJobLookupSource;
     private final PrintServiceLookupSource printServiceLookupSource;
-    private final WindowsPrinterLookupSource windowsPrinterLookupSource;
+    private final List<WindowsPrinterLookupSource> windowsPrinterLookupSources;
     private final Supplier<String> osNameSupplier;
 
     public static PrintServiceDiscoveryService getInstance() {
@@ -46,9 +52,18 @@ public class PrintServiceDiscoveryService {
             WindowsPrinterLookupSource windowsPrinterLookupSource,
             Supplier<String> osNameSupplier
     ) {
+        this(printerJobLookupSource, printServiceLookupSource, Collections.singletonList(windowsPrinterLookupSource), osNameSupplier);
+    }
+
+    PrintServiceDiscoveryService(
+            PrintServiceLookupSource printerJobLookupSource,
+            PrintServiceLookupSource printServiceLookupSource,
+            List<WindowsPrinterLookupSource> windowsPrinterLookupSources,
+            Supplier<String> osNameSupplier
+    ) {
         this.printerJobLookupSource = printerJobLookupSource;
         this.printServiceLookupSource = printServiceLookupSource;
-        this.windowsPrinterLookupSource = windowsPrinterLookupSource;
+        this.windowsPrinterLookupSources = new ArrayList<>(windowsPrinterLookupSources);
         this.osNameSupplier = osNameSupplier;
     }
 
@@ -59,10 +74,12 @@ public class PrintServiceDiscoveryService {
         addJavaPrintServices(printers, printServiceLookupSource.lookup(), "Java PrintServiceLookup");
 
         if (isWindows()) {
-            try {
-                addPrinterDTOs(printers, windowsPrinterLookupSource.lookup());
-            } catch (Exception e) {
-                log.warn("Failed to list Windows printers: {}", e.getMessage());
+            for (WindowsPrinterLookupSource windowsPrinterLookupSource : windowsPrinterLookupSources) {
+                try {
+                    addPrinterDTOs(printers, windowsPrinterLookupSource.lookup());
+                } catch (Exception e) {
+                    log.warn("Failed to list Windows printers from {}: {}", windowsPrinterLookupSource.getClass().getSimpleName(), e.getMessage());
+                }
             }
         }
 
@@ -155,7 +172,7 @@ public class PrintServiceDiscoveryService {
         List<PrintServiceDTO> lookup() throws Exception;
     }
 
-    private static class PowerShellWindowsPrinterLookup implements WindowsPrinterLookupSource {
+    private abstract static class PowerShellJsonPrinterLookup implements WindowsPrinterLookupSource {
         @Override
         public List<PrintServiceDTO> lookup() throws Exception {
             Process process = new ProcessBuilder(
@@ -165,22 +182,24 @@ public class PrintServiceDiscoveryService {
                     "-ExecutionPolicy",
                     "Bypass",
                     "-Command",
-                    "[Console]::OutputEncoding = [System.Text.Encoding]::UTF8; try { @(Get-CimInstance Win32_Printer -ErrorAction Stop | Select-Object Name,DriverName,PortName,Default,Network,Shared) | ConvertTo-Json -Compress } catch { @(Get-WmiObject Win32_Printer | Select-Object Name,DriverName,PortName,Default,Network,Shared) | ConvertTo-Json -Compress }"
+                    command()
             ).redirectErrorStream(true).start();
 
             boolean finished = process.waitFor(WINDOWS_LOOKUP_TIMEOUT_SECONDS, TimeUnit.SECONDS);
             if (!finished) {
                 process.destroyForcibly();
-                throw new IOException("Timed out while querying Win32_Printer");
+                throw new IOException("Timed out while querying Windows printers");
             }
 
             String output = new String(process.getInputStream().readAllBytes(), StandardCharsets.UTF_8).trim();
             if (process.exitValue() != 0) {
-                throw new IOException("Win32_Printer query failed: " + output);
+                throw new IOException("Windows printer query failed: " + output);
             }
 
             return parsePrinterJson(output);
         }
+
+        protected abstract String command();
 
         private List<PrintServiceDTO> parsePrinterJson(String json) throws IOException {
             ArrayList<PrintServiceDTO> printers = new ArrayList<>();
@@ -248,6 +267,27 @@ public class PrintServiceDiscoveryService {
         private boolean booleanValue(JsonNode printerNode, String fieldName) {
             JsonNode value = printerNode.get(fieldName);
             return value != null && value.asBoolean(false);
+        }
+    }
+
+    private static class PowerShellWindowsPrinterLookup extends PowerShellJsonPrinterLookup {
+        @Override
+        protected String command() {
+            return "[Console]::OutputEncoding = [System.Text.Encoding]::UTF8; try { @(Get-CimInstance Win32_Printer -ErrorAction Stop | Select-Object Name,DriverName,PortName,Default,Network,Shared) | ConvertTo-Json -Compress } catch { @(Get-WmiObject Win32_Printer | Select-Object Name,DriverName,PortName,Default,Network,Shared) | ConvertTo-Json -Compress }";
+        }
+    }
+
+    private static class PowerShellGetPrinterLookup extends PowerShellJsonPrinterLookup {
+        @Override
+        protected String command() {
+            return "[Console]::OutputEncoding = [System.Text.Encoding]::UTF8; if (Get-Command Get-Printer -ErrorAction SilentlyContinue) { @(Get-Printer | Select-Object Name,DriverName,PortName) | ConvertTo-Json -Compress } else { @() | ConvertTo-Json -Compress }";
+        }
+    }
+
+    private static class PowerShellRegistryPrinterLookup extends PowerShellJsonPrinterLookup {
+        @Override
+        protected String command() {
+            return "[Console]::OutputEncoding = [System.Text.Encoding]::UTF8; $printers = @(); $devices = Get-ItemProperty -Path 'HKCU:\\Software\\Microsoft\\Windows NT\\CurrentVersion\\Devices' -ErrorAction SilentlyContinue; if ($devices) { $printers += $devices.PSObject.Properties | Where-Object { $_.Name -notlike 'PS*' } | ForEach-Object { $parts = ('' + $_.Value) -split ','; [pscustomobject]@{ Name = $_.Name; DriverName = $parts[0]; PortName = (($parts | Select-Object -Skip 1) -join ',') } } }; $printers += Get-ChildItem -Path 'HKLM:\\SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\Print\\Printers' -ErrorAction SilentlyContinue | ForEach-Object { $item = Get-ItemProperty -LiteralPath $_.PSPath; [pscustomobject]@{ Name = $_.PSChildName; DriverName = $item.'Printer Driver'; PortName = $item.Port } }; @($printers) | ConvertTo-Json -Compress";
         }
     }
 }
