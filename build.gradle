@@ -37,6 +37,32 @@ dependencies {
     testImplementation group: 'junit', name: 'junit', version: '4.13.2'
 }
 
+tasks.withType(JavaCompile).configureEach {
+    options.encoding = 'UTF-8'
+}
+
 application {
     mainClass = 'tigerworkshop.webapphardwarebridge.GUI'
+}
+
+jar {
+    archiveFileName = 'webapp-hardware-bridge.jar'
+    manifest {
+        attributes 'Main-Class': application.mainClass.get()
+    }
+}
+
+tasks.register('stageInstallerFiles', Copy) {
+    dependsOn jar
+    duplicatesStrategy = DuplicatesStrategy.EXCLUDE
+
+    into layout.projectDirectory.dir('out/artifacts/webapp_hardware_bridge_jar')
+    from tasks.named('jar')
+    from configurations.runtimeClasspath
+    from('src/main/resources/web') {
+        into 'web'
+    }
+    from('tls') {
+        into 'tls'
+    }
 }

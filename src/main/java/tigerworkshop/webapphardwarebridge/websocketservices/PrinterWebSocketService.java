@@ -17,6 +17,7 @@ import tigerworkshop.webapphardwarebridge.responses.PrintDocument;
 import tigerworkshop.webapphardwarebridge.responses.PrintResult;
 import tigerworkshop.webapphardwarebridge.services.ConfigService;
 import tigerworkshop.webapphardwarebridge.services.DocumentService;
+import tigerworkshop.webapphardwarebridge.services.PrintServiceDiscoveryService;
 import tigerworkshop.webapphardwarebridge.utils.AnnotatedPrintable;
 import tigerworkshop.webapphardwarebridge.utils.ImagePrintable;
 
@@ -33,6 +34,7 @@ public class PrinterWebSocketService implements WebSocketServiceInterface {
 
     private static final ConfigService configService = ConfigService.getInstance();
     private static final DocumentService documentService = DocumentService.getInstance();
+    private static final PrintServiceDiscoveryService printServiceDiscoveryService = PrintServiceDiscoveryService.getInstance();
     private static final ObjectMapper objectMapper = new ObjectMapper();
     
     public PrinterWebSocketService() {
@@ -289,14 +291,13 @@ public class PrinterWebSocketService implements WebSocketServiceInterface {
 
         if (printerMappingOptional.isPresent()) {
             Config.PrinterMapping printerMapping = printerMappingOptional.get();
-            PrintService[] printServices = PrinterJob.lookupPrintServices();
+            Optional<PrintService> printServiceOptional = printServiceDiscoveryService.findPrintServiceByName(printerMapping.getName());
 
-            for (PrintService printService : printServices) {
-                if (printService.getName().equalsIgnoreCase(printerMapping.getName())) {
-                    log.info("Sending print job type: {} to printer: {}", type, printService.getName());
+            if (printServiceOptional.isPresent()) {
+                PrintService printService = printServiceOptional.get();
+                log.info("Sending print job type: {} to printer: {}", type, printService.getName());
 
-                    return new PrinterSearchResult(printService.getName(), printerMapping, printService.createPrintJob(), false);
-                }
+                return new PrinterSearchResult(printService.getName(), printerMapping, printService.createPrintJob(), false);
             }
         }
 
