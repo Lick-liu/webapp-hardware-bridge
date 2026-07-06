@@ -76,7 +76,7 @@ public class PrintServiceDiscoveryService {
 
         String expectedName = normalizedName(name);
         for (PrintService printService : lookupJavaPrintServices()) {
-            if (printService != null && normalizedName(printService.getName()).equals(expectedName)) {
+            if (printService != null && printService.getName() != null && normalizedName(printService.getName()).equals(expectedName)) {
                 return Optional.of(printService);
             }
         }
@@ -138,7 +138,7 @@ public class PrintServiceDiscoveryService {
     }
 
     private boolean isWindows() {
-        return osNameSupplier.get().toLowerCase(Locale.ROOT).contains("win");
+        return Optional.ofNullable(osNameSupplier.get()).orElse("").toLowerCase(Locale.ROOT).contains("win");
     }
 
     private static String normalizedName(String name) {
@@ -165,7 +165,7 @@ public class PrintServiceDiscoveryService {
                     "-ExecutionPolicy",
                     "Bypass",
                     "-Command",
-                    "try { @(Get-CimInstance Win32_Printer -ErrorAction Stop | Select-Object Name,DriverName,PortName,Default,Network,Shared) | ConvertTo-Json -Compress } catch { @(Get-WmiObject Win32_Printer | Select-Object Name,DriverName,PortName,Default,Network,Shared) | ConvertTo-Json -Compress }"
+                    "[Console]::OutputEncoding = [System.Text.Encoding]::UTF8; try { @(Get-CimInstance Win32_Printer -ErrorAction Stop | Select-Object Name,DriverName,PortName,Default,Network,Shared) | ConvertTo-Json -Compress } catch { @(Get-WmiObject Win32_Printer | Select-Object Name,DriverName,PortName,Default,Network,Shared) | ConvertTo-Json -Compress }"
             ).redirectErrorStream(true).start();
 
             boolean finished = process.waitFor(WINDOWS_LOOKUP_TIMEOUT_SECONDS, TimeUnit.SECONDS);
