@@ -18,6 +18,7 @@ import tigerworkshop.webapphardwarebridge.responses.PrintResult;
 import tigerworkshop.webapphardwarebridge.services.ConfigService;
 import tigerworkshop.webapphardwarebridge.services.DocumentService;
 import tigerworkshop.webapphardwarebridge.services.PrintServiceDiscoveryService;
+import tigerworkshop.webapphardwarebridge.services.VirtualPdfPrinterSupport;
 import tigerworkshop.webapphardwarebridge.utils.AnnotatedPrintable;
 import tigerworkshop.webapphardwarebridge.utils.ImagePrintable;
 
@@ -152,11 +153,16 @@ public class PrinterWebSocketService implements WebSocketServiceInterface {
     /**
      * Prints raw bytes to specified printer.
      */
-    private void printRaw(PrintDocument printDocument, PrinterSearchResult printerSearchResult) throws PrintException {
+    private void printRaw(PrintDocument printDocument, PrinterSearchResult printerSearchResult) throws Exception {
         log.debug("printRaw::{}", printDocument);
         long timeStart = System.currentTimeMillis();
 
         byte[] bytes = Base64.decodeBase64(printDocument.getRawContent());
+
+        if (VirtualPdfPrinterSupport.isVirtualPdfPrinter(printerSearchResult.getName())) {
+            printRawAsTextPage(printDocument, printerSearchResult, bytes);
+            return;
+        }
 
         DocPrintJob docPrintJob = printerSearchResult.getDocPrintJob();
         Doc doc = new SimpleDoc(bytes, DocFlavor.BYTE_ARRAY.AUTOSENSE, null);
@@ -164,6 +170,21 @@ public class PrinterWebSocketService implements WebSocketServiceInterface {
 
         long timeFinish = System.currentTimeMillis();
         log.info("printRaw finished in {} ms", timeFinish - timeStart);
+    }
+
+    /**
+     * Renders raw bytes as text for virtual PDF printers. Sending raw ESC/POS bytes directly to
+     * Microsoft Print to PDF creates a file containing those bytes, not a valid PDF.
+     */
+    private void printRawAsTextPage(PrintDocument printDocument, PrinterSearchResult printerSearchResult, byte[] bytes) throws PrinterException {
+        PrinterJob job = PrinterJob.getPrinterJob();
+        job.setPrintService(printerSearchResult.getDocPrintJob().getPrintService());
+        job.setJobName(printDocument.getType());
+        job.setCopies(printDocument.getQty());
+
+        PageFormat pageFormat = getPageFormat(job, printerSearchResult);
+        job.setPrintable(VirtualPdfPrinterSupport.createRawTextPrintable(bytes), pageFormat);
+        job.print();
     }
 
     /**
