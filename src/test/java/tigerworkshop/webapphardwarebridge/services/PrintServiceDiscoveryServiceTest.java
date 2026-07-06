@@ -70,6 +70,54 @@ public class PrintServiceDiscoveryServiceTest {
         assertFalse(windowsLookupCalled.get());
     }
 
+    @Test
+    public void listPrintersMergesWindowsVirtualPdfPrintersFromSecondaryLookupSource() {
+        PrintServiceDiscoveryService service = new PrintServiceDiscoveryService(
+                () -> new PrintService[0],
+                () -> new PrintService[0],
+                Arrays.asList(
+                        () -> Arrays.asList(new PrintServiceDTO("XP58 (已重定向 1)", "Win32 printer")),
+                        () -> Arrays.asList(
+                                new PrintServiceDTO("导出为WPS PDF", "registry virtual printer"),
+                                new PrintServiceDTO("Microsoft Print to PDF", "registry virtual printer")
+                        )
+                ),
+                () -> "Windows 11"
+        );
+
+        List<PrintServiceDTO> printers = service.listPrinters();
+
+        assertEquals(
+                Arrays.asList("XP58 (已重定向 1)", "导出为WPS PDF", "Microsoft Print to PDF"),
+                printerNames(printers)
+        );
+    }
+
+    @Test
+    public void listPrintersContinuesWhenOneWindowsLookupFails() {
+        PrintServiceDiscoveryService service = new PrintServiceDiscoveryService(
+                () -> new PrintService[0],
+                () -> new PrintService[0],
+                Arrays.asList(
+                        () -> {
+                            throw new IllegalStateException("Win32 printer lookup failed");
+                        },
+                        () -> Arrays.asList(
+                                new PrintServiceDTO("导出为WPS PDF", "registry virtual printer"),
+                                new PrintServiceDTO("Microsoft Print to PDF", "registry virtual printer")
+                        )
+                ),
+                () -> "Windows 11"
+        );
+
+        List<PrintServiceDTO> printers = service.listPrinters();
+
+        assertEquals(
+                Arrays.asList("导出为WPS PDF", "Microsoft Print to PDF"),
+                printerNames(printers)
+        );
+    }
+
     private static List<String> printerNames(List<PrintServiceDTO> printers) {
         return printers.stream().map(printer -> printer.name).collect(Collectors.toList());
     }
