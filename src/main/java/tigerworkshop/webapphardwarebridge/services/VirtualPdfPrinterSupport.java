@@ -39,8 +39,8 @@ public class VirtualPdfPrinterSupport {
                 .replace('\r', '\n');
 
         List<String> lines = text.lines()
-                .map(String::trim)
-                .filter(line -> !line.isEmpty())
+                .map(String::stripTrailing)
+                .filter(line -> !line.strip().isEmpty())
                 .collect(Collectors.toList());
 
         if (lines.isEmpty()) {
