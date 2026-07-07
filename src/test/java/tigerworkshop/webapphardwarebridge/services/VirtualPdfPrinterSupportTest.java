@@ -35,4 +35,19 @@ public class VirtualPdfPrinterSupportTest {
                 VirtualPdfPrinterSupport.toPrintableTextLines(rawBytes, StandardCharsets.UTF_8)
         );
     }
+
+    @Test
+    public void preservesLeadingSpacesForPackageOptionLines() {
+        byte[] rawBytes = "新饭套餐test1        x1  100.00\n  竹叶青             x3\n  碧潭飘雪           x2\n  茉莉花茶           x2\n".getBytes(StandardCharsets.UTF_8);
+
+        assertEquals(
+                Arrays.asList(
+                        "新饭套餐test1        x1  100.00",
+                        "  竹叶青             x3",
+                        "  碧潭飘雪           x2",
+                        "  茉莉花茶           x2"
+                ),
+                VirtualPdfPrinterSupport.toPrintableTextLines(rawBytes, StandardCharsets.UTF_8)
+        );
+    }
 }
