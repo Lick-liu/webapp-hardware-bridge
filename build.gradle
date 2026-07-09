@@ -66,3 +66,46 @@ tasks.register('stageInstallerFiles', Copy) {
         into 'tls'
     }
 }
+
+tasks.register('stageLinuxDistribution', Copy) {
+    dependsOn jar
+    duplicatesStrategy = DuplicatesStrategy.EXCLUDE
+
+    into layout.buildDirectory.dir('linux-dist/webapp-hardware-bridge')
+    from(tasks.named('jar')) {
+        into 'lib'
+    }
+    from(configurations.runtimeClasspath) {
+        into 'lib'
+    }
+    from('src/main/resources/web') {
+        into 'web'
+    }
+    from('tls') {
+        into 'tls'
+    }
+    from('src/linux/bin') {
+        into 'bin'
+        fileMode = 0755
+    }
+    from('LINUX.md')
+    from('README.md')
+    from('LICENSE')
+}
+
+tasks.register('linuxTar', Tar) {
+    dependsOn stageLinuxDistribution
+    archiveBaseName = 'webapp-hardware-bridge'
+    archiveClassifier = 'linux-x86_64'
+    archiveExtension = 'tar.gz'
+    compression = Compression.GZIP
+    destinationDirectory = layout.projectDirectory.dir('out/distributions')
+
+    from(layout.buildDirectory.dir('linux-dist'))
+
+    eachFile { details ->
+        if (details.path.startsWith('webapp-hardware-bridge/bin/')) {
+            details.mode = 0755
+        }
+    }
+}
