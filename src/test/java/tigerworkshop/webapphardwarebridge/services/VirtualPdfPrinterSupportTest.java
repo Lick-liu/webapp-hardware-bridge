@@ -12,6 +12,8 @@ public class VirtualPdfPrinterSupportTest {
     @Test
     public void detectsWindowsVirtualPdfPrinters() {
         assertTrue(VirtualPdfPrinterSupport.isVirtualPdfPrinter("Microsoft Print to PDF"));
+        assertTrue(VirtualPdfPrinterSupport.isVirtualPdfPrinter("Save as PDF"));
+        assertTrue(VirtualPdfPrinterSupport.isVirtualPdfPrinter("另存为 PDF"));
         assertTrue(VirtualPdfPrinterSupport.isVirtualPdfPrinter("导出为WPS PDF"));
         assertFalse(VirtualPdfPrinterSupport.isVirtualPdfPrinter("XP58 (已重定向 1)"));
     }

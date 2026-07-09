@@ -78,6 +78,8 @@ public class PrintServiceDiscoveryServiceTest {
                 Arrays.asList(
                         () -> Arrays.asList(new PrintServiceDTO("XP58 (已重定向 1)", "Win32 printer")),
                         () -> Arrays.asList(
+                                new PrintServiceDTO("Save as PDF", "registry virtual printer"),
+                                new PrintServiceDTO("另存为 PDF", "registry virtual printer"),
                                 new PrintServiceDTO("导出为WPS PDF", "registry virtual printer"),
                                 new PrintServiceDTO("Microsoft Print to PDF", "registry virtual printer")
                         )
@@ -88,7 +90,7 @@ public class PrintServiceDiscoveryServiceTest {
         List<PrintServiceDTO> printers = service.listPrinters();
 
         assertEquals(
-                Arrays.asList("XP58 (已重定向 1)", "导出为WPS PDF", "Microsoft Print to PDF"),
+                Arrays.asList("XP58 (已重定向 1)", "Save as PDF", "另存为 PDF", "导出为WPS PDF", "Microsoft Print to PDF"),
                 printerNames(printers)
         );
     }

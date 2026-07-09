@@ -88,6 +88,10 @@ tasks.register('stageLinuxDistribution', Copy) {
         into 'bin'
         fileMode = 0755
     }
+    from('src/linux/scripts') {
+        into 'scripts'
+        fileMode = 0755
+    }
     from('LINUX.md')
     from('README.md')
     from('LICENSE')
@@ -105,6 +109,9 @@ tasks.register('linuxTar', Tar) {
 
     eachFile { details ->
         if (details.path.startsWith('webapp-hardware-bridge/bin/')) {
+            details.mode = 0755
+        }
+        if (details.path.startsWith('webapp-hardware-bridge/scripts/')) {
             details.mode = 0755
         }
     }
