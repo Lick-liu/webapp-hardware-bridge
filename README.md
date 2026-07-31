@@ -76,6 +76,7 @@ Therefore, WebApps do not need to care about the actual printer names.
 - [Advanced Configurations - HTTPS/WSS Support](ADVANCED.md#httpswss-support)
 - [Build from source](BUILD.md)
 - [Troubleshooting](TROUBLESHOOT.md)
+- [中文: XPrinter XP-58 系列 Linux/CUPS 驱动快速配置](docs/zh/xprinter-xp58-linux-cups.md)
 
 ## Upgrade
 
