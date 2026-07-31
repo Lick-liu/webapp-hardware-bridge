@@ -18,6 +18,7 @@ import tigerworkshop.webapphardwarebridge.responses.PrintResult;
 import tigerworkshop.webapphardwarebridge.services.ConfigService;
 import tigerworkshop.webapphardwarebridge.services.DocumentService;
 import tigerworkshop.webapphardwarebridge.services.PrintServiceDiscoveryService;
+import tigerworkshop.webapphardwarebridge.services.PrinterMappingService;
 import tigerworkshop.webapphardwarebridge.services.VirtualPdfPrinterSupport;
 import tigerworkshop.webapphardwarebridge.utils.AnnotatedPrintable;
 import tigerworkshop.webapphardwarebridge.utils.ImagePrintable;
@@ -308,7 +309,8 @@ public class PrinterWebSocketService implements WebSocketServiceInterface {
      * Get PrinterSearchResult for specified type
      */
     private PrinterSearchResult searchPrinterForType(String type) throws PrinterException {
-        Optional<Config.PrinterMapping> printerMappingOptional = configService.getConfig().getPrinter().getMappings().stream().filter(it -> it.getType().equals(type)).findFirst();
+        Optional<Config.PrinterMapping> printerMappingOptional =
+                PrinterMappingService.findMapping(configService.getConfig(), type);
 
         if (printerMappingOptional.isPresent()) {
             Config.PrinterMapping printerMapping = printerMappingOptional.get();

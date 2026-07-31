@@ -4,7 +4,7 @@ plugins {
 }
 
 group 'webapp-hardware-bridge'
-version '1.0.1'
+version '1.2.0'
 
 sourceCompatibility = '17'
 targetCompatibility = '17'

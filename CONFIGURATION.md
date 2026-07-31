@@ -121,6 +121,25 @@ Required by some printer/operating system to handle DPI correctly
 -  `0` - Auto detect
 - Common values: `213`, `300`
 
+Printer mapping types must be non-blank, at most 64 characters, and unique.
+Keep a `RECEIPT` mapping for compatibility with older WebApps. Additional
+business routes can use stable keys such as `FRONT` and `KITCHEN_A`:
+
+```json
+{
+  "printer": {
+    "enabled": true,
+    "autoAddUnknownType": false,
+    "fallbackToDefault": false,
+    "mappings": [
+      { "type": "RECEIPT", "name": "Front Printer" },
+      { "type": "FRONT", "name": "Front Printer" },
+      { "type": "KITCHEN_A", "name": "Kitchen Printer" }
+    ]
+  }
+}
+```
+
 ## Serials
 
 ### Enabled

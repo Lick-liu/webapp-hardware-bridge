@@ -16,6 +16,7 @@ import tigerworkshop.webapphardwarebridge.interfaces.WebSocketServerInterface;
 import tigerworkshop.webapphardwarebridge.interfaces.WebSocketServiceInterface;
 import tigerworkshop.webapphardwarebridge.services.ConfigService;
 import tigerworkshop.webapphardwarebridge.services.PrintServiceDiscoveryService;
+import tigerworkshop.webapphardwarebridge.services.PrinterMappingService;
 import tigerworkshop.webapphardwarebridge.utils.CertificateGenerator;
 import tigerworkshop.webapphardwarebridge.utils.ThreadUtil;
 import tigerworkshop.webapphardwarebridge.websocketservices.PrinterWebSocketService;
@@ -201,16 +202,28 @@ public class Server implements WebSocketServerInterface {
         });
 
         javalinServer.put("/config.json", ctx -> {
-            configService.loadFromJson(ctx.body());
-            configService.save();
+            try {
+                configService.loadFromJson(ctx.body());
+                configService.save();
 
-            messageToService("/notification", objectMapper.writeValueAsString(new NotificationDTO("INFO", "Setting", "Setting saved successfully")));
+                messageToService("/notification", objectMapper.writeValueAsString(
+                        new NotificationDTO("INFO", "Setting", "Setting saved successfully")));
 
-            ctx.contentType(ContentType.APPLICATION_JSON).result(configService.getConfig().toJson());
+                ctx.contentType(ContentType.APPLICATION_JSON).result(configService.getConfig().toJson());
+            } catch (IllegalArgumentException | JsonProcessingException exception) {
+                ctx.status(400).contentType(ContentType.APPLICATION_JSON)
+                        .result(objectMapper.writeValueAsString(
+                                Collections.singletonMap("message", exception.getMessage())));
+            }
         });
 
         javalinServer.get("/system/printers.json", ctx -> {
             ctx.contentType(ContentType.APPLICATION_JSON).result(objectMapper.writeValueAsString(printServiceDiscoveryService.listPrinters()));
+        });
+
+        javalinServer.get("/system/printer-mappings.json", ctx -> {
+            ctx.contentType(ContentType.APPLICATION_JSON).result(objectMapper.writeValueAsString(
+                    PrinterMappingService.listSafeMappings(configService.getConfig(), printServiceDiscoveryService)));
         });
 
         javalinServer.get("/system/serials.json", ctx -> {

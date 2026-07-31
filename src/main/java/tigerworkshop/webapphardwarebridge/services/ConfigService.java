@@ -25,22 +25,31 @@ public class ConfigService {
     private Config config = new Config();
 
     private ConfigService() {
+        File configFile = new File(CONFIG_FILENAME);
         try {
             loadFromFile(CONFIG_FILENAME);
         } catch (Exception e) {
-            log.warn("Failed loading config, creating new file");
-            save();
+            if (!configFile.exists()) {
+                log.warn("Config file does not exist, creating a default file");
+                save();
+            } else {
+                log.error("Failed loading config; keeping the invalid file intact and using defaults", e);
+            }
         }
     }
 
     public void loadFromJson(String json) throws JsonProcessingException {
-        log.info("Loading config from JSON: {}", json);
-        config = objectMapper.readValue(json, Config.class);
+        log.info("Loading config from JSON");
+        Config candidate = objectMapper.readValue(json, Config.class);
+        PrinterMappingService.normalizeAndValidate(candidate);
+        config = candidate;
     }
 
     public void loadFromFile(String filename) throws IOException {
         log.info("Loading config from file: {}", filename);
-        config = objectMapper.readValue(new File(filename), Config.class);
+        Config candidate = objectMapper.readValue(new File(filename), Config.class);
+        PrinterMappingService.normalizeAndValidate(candidate);
+        config = candidate;
     }
 
     public void save() {
@@ -52,7 +61,13 @@ public class ConfigService {
     }
 
     public void addPrintTypeToList(String printType) {
-        config.getPrinter().getMappings().add(new Config.PrinterMapping(printType, PRINTER_PLACEHOLDER, false, true, 0));
+        String normalizedType = PrinterMappingService.normalizeType(printType);
+        if (PrinterMappingService.findMapping(config, normalizedType).isPresent()) {
+            return;
+        }
+        config.getPrinter().getMappings()
+                .add(new Config.PrinterMapping(normalizedType, PRINTER_PLACEHOLDER, false, true, 0));
+        PrinterMappingService.normalizeAndValidate(config);
         save();
     }
 }
