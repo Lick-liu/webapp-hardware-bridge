@@ -15,13 +15,12 @@ import tigerworkshop.webapphardwarebridge.dtos.*;
 import tigerworkshop.webapphardwarebridge.interfaces.WebSocketServerInterface;
 import tigerworkshop.webapphardwarebridge.interfaces.WebSocketServiceInterface;
 import tigerworkshop.webapphardwarebridge.services.ConfigService;
+import tigerworkshop.webapphardwarebridge.services.PrintServiceDiscoveryService;
 import tigerworkshop.webapphardwarebridge.utils.CertificateGenerator;
 import tigerworkshop.webapphardwarebridge.utils.ThreadUtil;
 import tigerworkshop.webapphardwarebridge.websocketservices.PrinterWebSocketService;
 import tigerworkshop.webapphardwarebridge.websocketservices.SerialWebSocketService;
 
-import javax.print.PrintService;
-import java.awt.print.PrinterJob;
 import java.nio.ByteBuffer;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
@@ -34,6 +33,7 @@ public class Server implements WebSocketServerInterface {
 
     private static final ObjectMapper objectMapper = new ObjectMapper();
     private static final ConfigService configService = ConfigService.getInstance();
+    private static final PrintServiceDiscoveryService printServiceDiscoveryService = PrintServiceDiscoveryService.getInstance();
 
     private final ConcurrentHashMap<String, ConcurrentLinkedQueue<WsContext>> socketChannelSubscriptions = new ConcurrentHashMap<>();
     private final ConcurrentHashMap<String, ConcurrentLinkedQueue<WebSocketServiceInterface>> serviceChannelSubscriptions = new ConcurrentHashMap<>();
@@ -210,12 +210,7 @@ public class Server implements WebSocketServerInterface {
         });
 
         javalinServer.get("/system/printers.json", ctx -> {
-            ArrayList<PrintServiceDTO> dtos = new ArrayList<>();
-            for (PrintService service : PrinterJob.lookupPrintServices()) {
-                dtos.add(new PrintServiceDTO(service.getName(), ""));
-            }
-
-            ctx.contentType(ContentType.APPLICATION_JSON).result(objectMapper.writeValueAsString(dtos));
+            ctx.contentType(ContentType.APPLICATION_JSON).result(objectMapper.writeValueAsString(printServiceDiscoveryService.listPrinters()));
         });
 
         javalinServer.get("/system/serials.json", ctx -> {

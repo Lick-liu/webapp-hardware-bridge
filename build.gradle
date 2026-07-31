@@ -37,6 +37,82 @@ dependencies {
     testImplementation group: 'junit', name: 'junit', version: '4.13.2'
 }
 
+tasks.withType(JavaCompile).configureEach {
+    options.encoding = 'UTF-8'
+}
+
 application {
     mainClass = 'tigerworkshop.webapphardwarebridge.GUI'
+}
+
+jar {
+    archiveFileName = 'webapp-hardware-bridge.jar'
+    manifest {
+        attributes 'Main-Class': application.mainClass.get()
+    }
+}
+
+tasks.register('stageInstallerFiles', Copy) {
+    dependsOn jar
+    duplicatesStrategy = DuplicatesStrategy.EXCLUDE
+
+    into layout.projectDirectory.dir('out/artifacts/webapp_hardware_bridge_jar')
+    from tasks.named('jar')
+    from configurations.runtimeClasspath
+    from('src/main/resources/web') {
+        into 'web'
+    }
+    from('tls') {
+        into 'tls'
+    }
+}
+
+tasks.register('stageLinuxDistribution', Copy) {
+    dependsOn jar
+    duplicatesStrategy = DuplicatesStrategy.EXCLUDE
+
+    into layout.buildDirectory.dir('linux-dist/webapp-hardware-bridge')
+    from(tasks.named('jar')) {
+        into 'lib'
+    }
+    from(configurations.runtimeClasspath) {
+        into 'lib'
+    }
+    from('src/main/resources/web') {
+        into 'web'
+    }
+    from('tls') {
+        into 'tls'
+    }
+    from('src/linux/bin') {
+        into 'bin'
+        fileMode = 0755
+    }
+    from('src/linux/scripts') {
+        into 'scripts'
+        fileMode = 0755
+    }
+    from('LINUX.md')
+    from('README.md')
+    from('LICENSE')
+}
+
+tasks.register('linuxTar', Tar) {
+    dependsOn stageLinuxDistribution
+    archiveBaseName = 'webapp-hardware-bridge'
+    archiveClassifier = 'linux-x86_64'
+    archiveExtension = 'tar.gz'
+    compression = Compression.GZIP
+    destinationDirectory = layout.projectDirectory.dir('out/distributions')
+
+    from(layout.buildDirectory.dir('linux-dist'))
+
+    eachFile { details ->
+        if (details.path.startsWith('webapp-hardware-bridge/bin/')) {
+            details.mode = 0755
+        }
+        if (details.path.startsWith('webapp-hardware-bridge/scripts/')) {
+            details.mode = 0755
+        }
+    }
 }
