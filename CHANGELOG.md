@@ -1,5 +1,12 @@
 # Changelogs
 
+## 1.2.0 - 2026-08-13
+
+- Display the running application version in the Web UI and Windows installer metadata.
+- Support multiple named printer mappings for independent receipt destinations.
+- Make stable print job IDs replay-safe across concurrent browser tabs, retries, and helper restarts.
+- Fail closed when print-job replay state cannot be persisted, so an uncertain job is never printed automatically again.
+
 ## From 0.x to 1.0.0
 
 - 1.0 is a major rewrite, while maintain compatibility with existing WebApps

@@ -1,5 +1,18 @@
 Unicode true
 
+!define APP_VERSION "1.2.0"
+!ifndef BUNDLED_JRE_DIR
+!define BUNDLED_JRE_DIR "jre"
+!endif
+
+VIProductVersion "${APP_VERSION}.0"
+VIAddVersionKey /LANG=2052 "ProductName" "茶坊村本地打印助手"
+VIAddVersionKey /LANG=2052 "ProductVersion" "${APP_VERSION}"
+VIAddVersionKey /LANG=2052 "FileVersion" "${APP_VERSION}"
+VIAddVersionKey /LANG=2052 "FileDescription" "茶坊村本地打印助手"
+VIAddVersionKey /LANG=2052 "CompanyName" "茶坊村"
+VIAddVersionKey /LANG=2052 "LegalCopyright" "Copyright © 茶坊村"
+
 ; The name of the installer
 Name "茶坊村本地打印助手"
 
@@ -40,7 +53,7 @@ Section "!Main Application" ;No components page, name is not important
   
   ; Put file there
   File /r out\artifacts\webapp_hardware_bridge_jar\*
-  File /r jre
+  File /r "${BUNDLED_JRE_DIR}"
   
   File "install.nsi"
   File "icon.ico"
@@ -58,6 +71,7 @@ Section "!Main Application" ;No components page, name is not important
   
   ; Write the uninstall keys for Windows
   WriteRegStr HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\WebApp Hardware Bridge" "DisplayName" "茶坊村本地打印助手"
+  WriteRegStr HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\WebApp Hardware Bridge" "DisplayVersion" "${APP_VERSION}"
   WriteRegStr HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\WebApp Hardware Bridge" "UninstallString" '"$INSTDIR\uninstall.exe"'
   WriteRegDWORD HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\WebApp Hardware Bridge" "NoModify" 1
   WriteRegDWORD HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\WebApp Hardware Bridge" "NoRepair" 1

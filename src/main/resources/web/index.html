@@ -13,6 +13,7 @@
         <header class="d-flex flex-wrap justify-content-center py-3 mb-4 border-bottom">
             <div class="d-flex align-items-center mb-3 mb-md-0 me-md-auto">
                 <span class="fs-4 link-body-emphasis">茶坊村本地打印助手配置</span>
+                <span data-test="app-version" class="badge text-bg-secondary ms-2" v-if="version && version.version">v{{ version.version }}</span>
                 <a class="link-body-emphasis text-decoration-none ms-3" href="https://www.teahouses.cn/" rel="noopener noreferrer" target="_blank">收银系统就找茶坊村</a>
             </div>
             <button @click="saveConfig" class="btn btn-success ms-2">保存配置</button>
@@ -329,6 +330,7 @@ createApp({
     config: null,
     printers: [],
     serials: [],
+    version: null,
 
     loadConfig() {
         return axios.get('/config.json')
@@ -358,11 +360,15 @@ createApp({
         return axios.get('/system/serials.json')
             .then(response => this.serials = response.data)
     },
+    loadVersion() {
+        return axios.get('/system/version.json')
+            .then(response => this.version = response.data)
+    },
     restartServer() {
         return axios.post('/system/restart.json', this.config)
     },
     mounted() {
-        Promise.all([this.loadPrinters(), this.loadSerials()]).then(() => {
+        Promise.all([this.loadPrinters(), this.loadSerials(), this.loadVersion().catch(() => null)]).then(() => {
             this.loadConfig()
         })
     }
