@@ -9,4 +9,6 @@ build/
 config.json
 print-job-success-cache.json
 print-job-success-cache.json.tmp
+/local-print-device-context.json
+/local-print-device-context.json.*.tmp
 *.exe

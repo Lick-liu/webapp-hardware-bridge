@@ -1,5 +1,11 @@
 # Changelogs
 
+## 1.3.0 - 2026-08-15
+
+- Persist one random local-print device ID per helper installation.
+- Persist each shop's first activation task cursor with first-write-wins semantics.
+- Expose fail-closed device-context APIs for the Web v3 delivery protocol.
+
 ## 1.2.0 - 2026-08-13
 
 - Display the running application version in the Web UI and Windows installer metadata.

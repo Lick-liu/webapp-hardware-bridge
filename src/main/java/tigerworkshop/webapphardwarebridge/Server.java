@@ -15,6 +15,7 @@ import tigerworkshop.webapphardwarebridge.dtos.*;
 import tigerworkshop.webapphardwarebridge.interfaces.WebSocketServerInterface;
 import tigerworkshop.webapphardwarebridge.interfaces.WebSocketServiceInterface;
 import tigerworkshop.webapphardwarebridge.services.ConfigService;
+import tigerworkshop.webapphardwarebridge.services.LocalPrintDeviceContextService;
 import tigerworkshop.webapphardwarebridge.services.PrintServiceDiscoveryService;
 import tigerworkshop.webapphardwarebridge.services.PrinterMappingService;
 import tigerworkshop.webapphardwarebridge.utils.CertificateGenerator;
@@ -23,6 +24,7 @@ import tigerworkshop.webapphardwarebridge.websocketservices.PrinterWebSocketServ
 import tigerworkshop.webapphardwarebridge.websocketservices.SerialWebSocketService;
 
 import java.nio.ByteBuffer;
+import java.nio.file.Path;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentLinkedQueue;
@@ -35,6 +37,8 @@ public class Server implements WebSocketServerInterface {
     private static final ObjectMapper objectMapper = new ObjectMapper();
     private static final ConfigService configService = ConfigService.getInstance();
     private static final PrintServiceDiscoveryService printServiceDiscoveryService = PrintServiceDiscoveryService.getInstance();
+    private static final LocalPrintDeviceContextService localPrintDeviceContextService =
+            new LocalPrintDeviceContextService(Path.of(LocalPrintDeviceContextService.DEFAULT_FILENAME));
 
     private final ConcurrentHashMap<String, ConcurrentLinkedQueue<WsContext>> socketChannelSubscriptions = new ConcurrentHashMap<>();
     private final ConcurrentHashMap<String, ConcurrentLinkedQueue<WebSocketServiceInterface>> serviceChannelSubscriptions = new ConcurrentHashMap<>();
@@ -226,6 +230,36 @@ public class Server implements WebSocketServerInterface {
                     PrinterMappingService.listSafeMappings(configService.getConfig(), printServiceDiscoveryService)));
         });
 
+        javalinServer.get("/system/local-print-device-context.json", ctx -> {
+            try {
+                LocalPrintDeviceContextDTO dto =
+                        localPrintDeviceContextService.getContext(ctx.queryParam("shopId"));
+                ctx.contentType(ContentType.APPLICATION_JSON)
+                        .result(objectMapper.writeValueAsString(dto));
+            } catch (IllegalArgumentException exception) {
+                writeJsonError(ctx, 400, exception.getMessage());
+            } catch (Exception exception) {
+                log.error("Local print device context is unavailable", exception);
+                writeJsonError(ctx, 500, "Local print device context is unavailable");
+            }
+        });
+
+        javalinServer.post("/system/local-print-device-context/activation.json", ctx -> {
+            try {
+                LocalPrintDeviceActivationDTO request =
+                        objectMapper.readValue(ctx.body(), LocalPrintDeviceActivationDTO.class);
+                LocalPrintDeviceContextDTO dto = localPrintDeviceContextService.activate(
+                        request.getShopId(), request.getActivationTaskId());
+                ctx.contentType(ContentType.APPLICATION_JSON)
+                        .result(objectMapper.writeValueAsString(dto));
+            } catch (IllegalArgumentException | JsonProcessingException exception) {
+                writeJsonError(ctx, 400, exception.getMessage());
+            } catch (Exception exception) {
+                log.error("Local print device context activation failed", exception);
+                writeJsonError(ctx, 500, "Local print device context is unavailable");
+            }
+        });
+
         javalinServer.get("/system/serials.json", ctx -> {
             ArrayList<SerialPortDTO> dtos = new ArrayList<>();
             for (SerialPort port : SerialPort.getCommPorts()) {
@@ -267,6 +301,13 @@ public class Server implements WebSocketServerInterface {
         }
 
         javalinServer.stop();
+    }
+
+    private void writeJsonError(io.javalin.http.Context context, int status, String message)
+            throws JsonProcessingException {
+        context.status(status)
+                .contentType(ContentType.APPLICATION_JSON)
+                .result(objectMapper.writeValueAsString(Collections.singletonMap("message", message)));
     }
 
     /*
