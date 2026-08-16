@@ -11,4 +11,5 @@ public class LocalPrintDeviceContextDTO {
     private String deviceId;
     private String shopId;
     private Long activationTaskId;
+    private String activationToken;
 }

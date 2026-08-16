@@ -1,5 +1,11 @@
 # Changelogs
 
+## 1.3.1 - 2026-08-16
+
+- Restrict browser HTTP and WebSocket access to exact configured origins instead of wildcard CORS.
+- Require an expiring, one-time, shop-bound credential before persisting or correcting an activation cursor.
+- Add an explicit cursor-correction route for authorized recovery from a bad first activation.
+
 ## 1.3.0 - 2026-08-15
 
 - Persist one random local-print device ID per helper installation.

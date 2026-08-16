@@ -20,6 +20,25 @@
 - (Default) `12212`
 - Range: `1024` - `65535`
 
+### Allowed browser origins
+
+`server.allowedOrigins` is an exact allowlist of browser origins. Each value must
+contain only `http` or `https`, host, and optional port; wildcards, paths, query
+strings, fragments, and opaque `null` origins are rejected. The helper's own
+configured URI is added automatically.
+
+Defaults:
+
+- `https://dev.teahouses.cn`
+- `https://test.teahouses.cn`
+- `https://shop.teahouses.cn`
+- `http://localhost:3333`
+- `http://127.0.0.1:3333`
+
+Browser HTTP and WebSocket requests from other origins are rejected. A local
+non-browser client may perform origin-less safe reads; state-changing HTTP and
+origin-less WebSocket access require the configured authentication token.
+
 ### Enable authentication
 
 [See Authentication for more detail](ADVANCED.md#authentication)

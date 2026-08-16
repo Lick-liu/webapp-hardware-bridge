@@ -12,6 +12,11 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
 import java.nio.file.StandardOpenOption;
+import java.security.MessageDigest;
+import java.time.Clock;
+import java.time.Duration;
+import java.time.Instant;
+import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.UUID;
@@ -20,16 +25,24 @@ import java.util.regex.Pattern;
 public class LocalPrintDeviceContextService {
     public static final String DEFAULT_FILENAME = "local-print-device-context.json";
     private static final String DEVICE_ID_PREFIX = "local-print-device-";
+    private static final Duration ACTIVATION_TOKEN_TTL = Duration.ofMinutes(5);
     private static final Pattern DEVICE_ID_PATTERN = Pattern.compile("[A-Za-z0-9._:-]{1,128}");
     private static final Pattern SHOP_ID_PATTERN = Pattern.compile("[0-9]{1,32}");
 
     private final Path contextFile;
+    private final Clock clock;
     private final ObjectMapper objectMapper = new ObjectMapper()
             .configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false);
+    private final Map<String, ActivationCredential> activationCredentials = new HashMap<>();
     private LocalPrintDeviceState state;
 
     public LocalPrintDeviceContextService(Path contextFile) {
+        this(contextFile, Clock.systemUTC());
+    }
+
+    LocalPrintDeviceContextService(Path contextFile, Clock clock) {
         this.contextFile = contextFile.toAbsolutePath();
+        this.clock = clock;
     }
 
     public synchronized LocalPrintDeviceContextDTO getContext(String shopId) throws IOException {
@@ -39,18 +52,35 @@ public class LocalPrintDeviceContextService {
     }
 
     public synchronized LocalPrintDeviceContextDTO activate(
-            String shopId, Long activationTaskId) throws IOException {
+            String shopId, Long activationTaskId, String activationToken) throws IOException {
         String normalizedShopId = normalizeShopId(shopId);
-        if (activationTaskId == null || activationTaskId < 0) {
-            throw new IllegalArgumentException("activationTaskId must be a non-negative integer");
-        }
+        validateActivationTaskId(activationTaskId);
 
         LocalPrintDeviceState current = loadOrCreate();
+        consumeActivationCredential(
+                normalizedShopId, current.getDeviceId(), activationToken);
         Long existing = current.getShopActivationTaskIds().get(normalizedShopId);
         if (existing != null) {
             return toContext(current, normalizedShopId);
         }
 
+        Map<String, Long> updatedCursors = new LinkedHashMap<>(current.getShopActivationTaskIds());
+        updatedCursors.put(normalizedShopId, activationTaskId);
+        LocalPrintDeviceState updated =
+                new LocalPrintDeviceState(current.getDeviceId(), updatedCursors);
+        persistAtomically(updated);
+        state = updated;
+        return toContext(updated, normalizedShopId);
+    }
+
+    public synchronized LocalPrintDeviceContextDTO correctActivation(
+            String shopId, Long activationTaskId, String activationToken) throws IOException {
+        String normalizedShopId = normalizeShopId(shopId);
+        validateActivationTaskId(activationTaskId);
+
+        LocalPrintDeviceState current = loadOrCreate();
+        consumeActivationCredential(
+                normalizedShopId, current.getDeviceId(), activationToken);
         Map<String, Long> updatedCursors = new LinkedHashMap<>(current.getShopActivationTaskIds());
         updatedCursors.put(normalizedShopId, activationTaskId);
         LocalPrintDeviceState updated =
@@ -125,10 +155,54 @@ public class LocalPrintDeviceContextService {
 
     private LocalPrintDeviceContextDTO toContext(
             LocalPrintDeviceState current, String shopId) {
+        String activationToken = issueActivationCredential(shopId, current.getDeviceId());
         return new LocalPrintDeviceContextDTO(
                 current.getDeviceId(),
                 shopId,
-                current.getShopActivationTaskIds().get(shopId));
+                current.getShopActivationTaskIds().get(shopId),
+                activationToken);
+    }
+
+    private String issueActivationCredential(String shopId, String deviceId) {
+        Instant now = clock.instant();
+        ActivationCredential existing = activationCredentials.get(shopId);
+        if (existing != null
+                && existing.expiresAt().isAfter(now)
+                && existing.deviceId().equals(deviceId)) {
+            return existing.token();
+        }
+        ActivationCredential created = new ActivationCredential(
+                UUID.randomUUID().toString(),
+                deviceId,
+                now.plus(ACTIVATION_TOKEN_TTL));
+        activationCredentials.put(shopId, created);
+        return created.token();
+    }
+
+    private void consumeActivationCredential(
+            String shopId, String deviceId, String activationToken) {
+        ActivationCredential expected = activationCredentials.get(shopId);
+        Instant now = clock.instant();
+        boolean valid = expected != null
+                && expected.expiresAt().isAfter(now)
+                && expected.deviceId().equals(deviceId)
+                && activationToken != null
+                && MessageDigest.isEqual(
+                        expected.token().getBytes(java.nio.charset.StandardCharsets.UTF_8),
+                        activationToken.trim().getBytes(java.nio.charset.StandardCharsets.UTF_8));
+        if (!valid) {
+            if (expected != null && !expected.expiresAt().isAfter(now)) {
+                activationCredentials.remove(shopId);
+            }
+            throw new InvalidActivationTokenException();
+        }
+        activationCredentials.remove(shopId);
+    }
+
+    private void validateActivationTaskId(Long activationTaskId) {
+        if (activationTaskId == null || activationTaskId < 0) {
+            throw new IllegalArgumentException("activationTaskId must be a non-negative integer");
+        }
     }
 
     private String normalizeShopId(String shopId) {
@@ -136,5 +210,14 @@ public class LocalPrintDeviceContextService {
             throw new IllegalArgumentException("shopId must contain digits only");
         }
         return shopId.trim();
+    }
+
+    private record ActivationCredential(String token, String deviceId, Instant expiresAt) {
+    }
+
+    public static class InvalidActivationTokenException extends IllegalArgumentException {
+        public InvalidActivationTokenException() {
+            super("Local print device activation credential is invalid or expired");
+        }
     }
 }

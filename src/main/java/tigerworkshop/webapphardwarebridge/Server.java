@@ -7,7 +7,7 @@ import com.fazecast.jSerialComm.SerialPort;
 import io.javalin.Javalin;
 import io.javalin.community.ssl.SslPlugin;
 import io.javalin.http.ContentType;
-import io.javalin.plugin.bundled.CorsPluginConfig;
+import io.javalin.http.Context;
 import io.javalin.util.JavalinBindException;
 import io.javalin.websocket.WsContext;
 import lombok.extern.log4j.Log4j2;
@@ -56,12 +56,14 @@ public class Server implements WebSocketServerInterface {
         Config config = configService.getConfig();
 
         Config.Server serverConfig = config.getServer();
+        TrustedOriginPolicy trustedOriginPolicy = TrustedOriginPolicy.from(serverConfig);
 
         // Create Javalin Server
         javalinServer = Javalin.create(cfg -> {
             cfg.showJavalinBanner = false;
             cfg.staticFiles.add(staticFiles -> staticFiles.directory = "web");
-            cfg.bundledPlugins.enableCors(cors -> cors.addRule(CorsPluginConfig.CorsRule::anyHost));
+            cfg.bundledPlugins.enableCors(cors ->
+                    cors.addRule(trustedOriginPolicy::configureCors));
 
             if (serverConfig.getTls().isEnabled()) {
                 if (serverConfig.getTls().isSelfSigned()) {
@@ -85,13 +87,21 @@ public class Server implements WebSocketServerInterface {
         // Add WebSocket Auth
         javalinServer.wsBefore(ctx -> {
             ctx.onConnect(wsConnectContext -> {
+                boolean authenticated = isWebSocketAuthenticated(
+                        wsConnectContext, serverConfig.getAuthentication());
+                if (!trustedOriginPolicy.isWebSocketRequestAllowed(
+                        wsConnectContext.header("Origin"), authenticated)) {
+                    wsConnectContext.closeSession(1008, "Untrusted browser origin");
+                    return;
+                }
+
                 wsConnectContext.session.getPolicy().setMaxBinaryMessageSize(-1);
                 wsConnectContext.session.getPolicy().setMaxTextMessageSize(-1);
 
                 wsConnectContext.enableAutomaticPings(5, TimeUnit.SECONDS);
 
                 if (serverConfig.getAuthentication().isEnabled()) {
-                    if (Optional.ofNullable(wsConnectContext.queryParam("token")).orElse("").equals(serverConfig.getAuthentication().getToken())) {
+                    if (authenticated) {
                         return;
                     }
 
@@ -180,23 +190,22 @@ public class Server implements WebSocketServerInterface {
 
         // Add HTTP Auth
         javalinServer.before(ctx -> {
+            boolean authenticated = isHttpAuthenticated(
+                    ctx, serverConfig.getAuthentication());
+            if (!trustedOriginPolicy.isHttpRequestAllowed(
+                    ctx.header("Origin"), ctx.method(), authenticated)) {
+                ctx.status(403).result("Untrusted browser origin");
+                ctx.skipRemainingHandlers();
+                return;
+            }
             if (serverConfig.getAuthentication().isEnabled()) {
-                try {
-                    // Bearer Token
-                    if (Optional.ofNullable(ctx.header("Authorization")).orElse("").endsWith(serverConfig.getAuthentication().getToken())) {
-                        return;
-                    }
-
-                    // Basic Auth
-                    if (ctx.basicAuthCredentials() != null && Objects.equals(ctx.basicAuthCredentials().getPassword(), serverConfig.getAuthentication().getToken())) {
-                        return;
-                    }
-                } catch (Exception e) {
-                    // NOOP
+                if (authenticated) {
+                    return;
                 }
 
                 ctx.header("WWW-Authenticate", "Basic realm=\"Token required\"");
-                ctx.res().sendError(401, "Token mismatch");
+                ctx.status(401).result("Token mismatch");
+                ctx.skipRemainingHandlers();
             }
         });
 
@@ -249,13 +258,35 @@ public class Server implements WebSocketServerInterface {
                 LocalPrintDeviceActivationDTO request =
                         objectMapper.readValue(ctx.body(), LocalPrintDeviceActivationDTO.class);
                 LocalPrintDeviceContextDTO dto = localPrintDeviceContextService.activate(
-                        request.getShopId(), request.getActivationTaskId());
+                        request.getShopId(), request.getActivationTaskId(),
+                        request.getActivationToken());
                 ctx.contentType(ContentType.APPLICATION_JSON)
                         .result(objectMapper.writeValueAsString(dto));
+            } catch (LocalPrintDeviceContextService.InvalidActivationTokenException exception) {
+                writeJsonError(ctx, 403, exception.getMessage());
             } catch (IllegalArgumentException | JsonProcessingException exception) {
                 writeJsonError(ctx, 400, exception.getMessage());
             } catch (Exception exception) {
                 log.error("Local print device context activation failed", exception);
+                writeJsonError(ctx, 500, "Local print device context is unavailable");
+            }
+        });
+
+        javalinServer.put("/system/local-print-device-context/activation.json", ctx -> {
+            try {
+                LocalPrintDeviceActivationDTO request =
+                        objectMapper.readValue(ctx.body(), LocalPrintDeviceActivationDTO.class);
+                LocalPrintDeviceContextDTO dto = localPrintDeviceContextService.correctActivation(
+                        request.getShopId(), request.getActivationTaskId(),
+                        request.getActivationToken());
+                ctx.contentType(ContentType.APPLICATION_JSON)
+                        .result(objectMapper.writeValueAsString(dto));
+            } catch (LocalPrintDeviceContextService.InvalidActivationTokenException exception) {
+                writeJsonError(ctx, 403, exception.getMessage());
+            } catch (IllegalArgumentException | JsonProcessingException exception) {
+                writeJsonError(ctx, 400, exception.getMessage());
+            } catch (Exception exception) {
+                log.error("Local print device context correction failed", exception);
                 writeJsonError(ctx, 500, "Local print device context is unavailable");
             }
         });
@@ -308,6 +339,33 @@ public class Server implements WebSocketServerInterface {
         context.status(status)
                 .contentType(ContentType.APPLICATION_JSON)
                 .result(objectMapper.writeValueAsString(Collections.singletonMap("message", message)));
+    }
+
+    private boolean isHttpAuthenticated(
+            Context context, Config.Authentication authentication) {
+        if (!authentication.isEnabled()
+                || authentication.getToken() == null
+                || authentication.getToken().isBlank()) {
+            return false;
+        }
+        try {
+            String token = authentication.getToken();
+            if (Objects.equals(context.header("Authorization"), "Bearer " + token)) {
+                return true;
+            }
+            return context.basicAuthCredentials() != null
+                    && Objects.equals(context.basicAuthCredentials().getPassword(), token);
+        } catch (Exception exception) {
+            return false;
+        }
+    }
+
+    private boolean isWebSocketAuthenticated(
+            WsContext context, Config.Authentication authentication) {
+        return authentication.isEnabled()
+                && authentication.getToken() != null
+                && !authentication.getToken().isBlank()
+                && Objects.equals(context.queryParam("token"), authentication.getToken());
     }
 
     /*
