@@ -1,0 +1,11 @@
+allprojects {
+    afterEvaluate { p ->
+        p.tasks.register('stageMacInstaller', Copy) {
+            dependsOn p.tasks.named('jar')
+            into p.layout.buildDirectory.dir('macos/input')
+            from p.tasks.named('jar')
+            from p.configurations.runtimeClasspath
+            duplicatesStrategy = DuplicatesStrategy.FAIL
+        }
+    }
+}
