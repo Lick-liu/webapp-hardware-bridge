@@ -30,7 +30,7 @@ public final class MacRawTransportProbe {
         try (ServerSocket sink = new ServerSocket(0, 1, InetAddress.getByName("127.0.0.1"))) {
             sink.setSoTimeout(45_000);
             command("sudo", "-n", "/usr/sbin/lpadmin", "-p", queue, "-D", "Tea Raw Probe Display Name", "-E",
-                    "-v", "socket://127.0.0.1:" + sink.getLocalPort() + "?waiteof=false", "-m", model);
+                    "-v", "socket://127.0.0.1:" + sink.getLocalPort(), "-m", model);
             PrintService printer = Arrays.stream(PrintServiceLookup.lookupPrintServices(null, null))
                     .filter(p -> { PrinterURI uri = p.getAttribute(PrinterURI.class);
                         return uri != null && uri.getURI().getPath().endsWith("/" + queue); })
