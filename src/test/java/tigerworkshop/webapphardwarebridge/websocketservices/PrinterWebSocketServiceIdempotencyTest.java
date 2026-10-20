@@ -9,6 +9,7 @@ import tigerworkshop.webapphardwarebridge.interfaces.WebSocketServiceInterface;
 import tigerworkshop.webapphardwarebridge.responses.PrintDocument;
 import tigerworkshop.webapphardwarebridge.responses.PrintResult;
 import tigerworkshop.webapphardwarebridge.services.PrintJobReplayGuard;
+import tigerworkshop.webapphardwarebridge.services.MacRawPrinter;
 
 import java.nio.file.Path;
 import java.time.Clock;
@@ -29,6 +30,32 @@ public class PrinterWebSocketServiceIdempotencyTest {
 
     @Rule
     public TemporaryFolder temporaryFolder = new TemporaryFolder();
+
+    @Test
+    public void uncertainSubmissionCannotRetryEvenAfterRestart() throws Exception {
+        Path cache = temporaryFolder.getRoot().toPath().resolve("unknown-cache.json");
+        AtomicInteger executions = new AtomicInteger();
+        RecordingServer server = new RecordingServer();
+        PrinterWebSocketService service = new PrinterWebSocketService(
+                new PrintJobReplayGuard(cache, Duration.ofHours(24), 100, Clock.systemUTC()), document -> {
+                    executions.incrementAndGet();
+                    throw new MacRawPrinter.SubmissionUnknownException("submit timeout");
+                });
+        service.onRegister(server);
+        service.printDocument(document("unknown-id"));
+        service.printDocument(document("unknown-id"));
+        assertEquals(1, executions.get());
+        assertEquals("RECONCILE_REQUIRED", server.printResults.get(0).state);
+        assertEquals("RECONCILE_REQUIRED", server.printResults.get(1).state);
+        PrinterWebSocketService restarted = new PrinterWebSocketService(
+                new PrintJobReplayGuard(cache, Duration.ofHours(24), 100, Clock.systemUTC()), document -> {
+                    executions.incrementAndGet(); return success(document.getId());
+                });
+        restarted.onRegister(server);
+        restarted.printDocument(document("unknown-id"));
+        assertEquals(1, executions.get());
+        assertEquals("RECONCILE_REQUIRED", server.printResults.get(2).state);
+    }
 
     @Test
     public void concurrentSameIdEntersPhysicalExecutorOnce() throws Exception {

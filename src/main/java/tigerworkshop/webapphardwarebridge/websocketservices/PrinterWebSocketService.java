@@ -21,6 +21,7 @@ import tigerworkshop.webapphardwarebridge.services.PrintServiceDiscoveryService;
 import tigerworkshop.webapphardwarebridge.services.PrinterMappingService;
 import tigerworkshop.webapphardwarebridge.services.PrintJobReplayGuard;
 import tigerworkshop.webapphardwarebridge.services.VirtualPdfPrinterSupport;
+import tigerworkshop.webapphardwarebridge.services.MacRawPrinter;
 import tigerworkshop.webapphardwarebridge.utils.AnnotatedPrintable;
 import tigerworkshop.webapphardwarebridge.utils.ImagePrintable;
 
@@ -155,11 +156,13 @@ public class PrinterWebSocketService implements WebSocketServiceInterface {
             result = printExecutor.execute(printDocument);
         } catch (Exception exception) {
             log.error("Unexpected print executor failure for id={}", printDocument.getId(), exception);
-            result = new PrintResult(false, exception.getMessage(), printDocument.getId(), null);
+            result = failureResult(exception, printDocument.getId(), null);
         }
 
         if (decision.action() == PrintJobReplayGuard.Action.EXECUTE) {
-            if (Boolean.TRUE.equals(result.success)) {
+            if ("RECONCILE_REQUIRED".equals(result.state)) {
+                replayGuard.requireReconciliation(printDocument.getId(), result);
+            } else if (Boolean.TRUE.equals(result.success)) {
                 replayGuard.succeed(printDocument.getId(), result);
             } else {
                 replayGuard.fail(printDocument.getId());
@@ -170,6 +173,14 @@ public class PrinterWebSocketService implements WebSocketServiceInterface {
 
     private void sendPrintResult(PrintResult result) throws Exception {
         server.messageToServer(getChannel(), objectMapper.writeValueAsString(result));
+    }
+
+    private static PrintResult failureResult(Exception error, String id, String printerName) {
+        if (error instanceof MacRawPrinter.SubmissionUnknownException) {
+            // Preserve the existing reconciliation contract; old clients must not retry uncertain jobs.
+            return new PrintResult(true, error.getMessage(), id, printerName, "RECONCILE_REQUIRED");
+        }
+        return new PrintResult(false, error.getMessage(), id, printerName);
     }
 
     private PrintResult executePrintDocument(PrintDocument printDocument) throws Exception {
@@ -206,9 +217,13 @@ public class PrinterWebSocketService implements WebSocketServiceInterface {
                 documentService.deleteDocument(printDocument);
             }
 
-            server.messageToService("/notification", objectMapper.writeValueAsString(new NotificationDTO("ERROR", "Print Error " + printDocument.getType(), errorMessage)));
+            try {
+                server.messageToService("/notification", objectMapper.writeValueAsString(new NotificationDTO("ERROR", "Print Error " + printDocument.getType(), errorMessage)));
+            } catch (Exception notificationError) {
+                log.warn("Could not deliver print error notification; preserving the original print outcome");
+            }
 
-            return new PrintResult(false, errorMessage, printDocument.getId(), printerSearchResult != null ? printerSearchResult.getName() : null);
+            return failureResult(e, printDocument.getId(), printerSearchResult != null ? printerSearchResult.getName() : null);
         }
     }
 
@@ -241,7 +256,7 @@ public class PrinterWebSocketService implements WebSocketServiceInterface {
      * Prints raw bytes to specified printer.
      */
     private void printRaw(PrintDocument printDocument, PrinterSearchResult printerSearchResult) throws Exception {
-        log.debug("printRaw::{}", printDocument);
+        log.debug("printRaw type={}, id={}", printDocument.getType(), printDocument.getId());
         long timeStart = System.currentTimeMillis();
 
         byte[] bytes = Base64.decodeBase64(printDocument.getRawContent());
@@ -252,6 +267,10 @@ public class PrinterWebSocketService implements WebSocketServiceInterface {
         }
 
         DocPrintJob docPrintJob = printerSearchResult.getDocPrintJob();
+        if (System.getProperty("os.name", "").startsWith("Mac")) {
+            new MacRawPrinter().submit(docPrintJob.getPrintService(), bytes);
+            return;
+        }
         Doc doc = new SimpleDoc(bytes, DocFlavor.BYTE_ARRAY.AUTOSENSE, null);
         docPrintJob.print(doc, null);
 

@@ -1,6 +1,6 @@
 Unicode true
 
-!define APP_VERSION "1.3.1"
+!define APP_VERSION "1.3.2"
 !ifndef BUNDLED_JRE_DIR
 !define BUNDLED_JRE_DIR "jre"
 !endif

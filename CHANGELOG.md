@@ -1,5 +1,12 @@
 # Changelogs
 
+## 1.3.2 - 2026-10-20
+
+- Submit macOS ESC/POS receipts through CUPS with explicit raw mode and no banner; preserve all binary raster bytes.
+- Resolve the CUPS destination from the printer URI instead of guessing from its display name.
+- Persist reconciliation-required outcomes after an uncertain Mac submission to prevent automatic duplicate printing.
+- Keep Windows, PDF/image rendering, device identity and activation behavior unchanged.
+
 ## 1.3.1 - 2026-08-16
 
 - Restrict browser HTTP and WebSocket access to exact configured origins instead of wildcard CORS.

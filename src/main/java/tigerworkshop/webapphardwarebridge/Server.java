@@ -130,7 +130,7 @@ public class Server implements WebSocketServerInterface {
                 });
 
                 ws.onMessage(ctx -> {
-                    log.info("{} sent message to {}: {}", ctx.host(), printerWebSocketService.getChannel(), ctx.message());
+                    log.info("{} sent message to {}: {} characters", ctx.host(), printerWebSocketService.getChannel(), ctx.message().length());
 
                     messageToService("/printer", ctx.message());
                 });

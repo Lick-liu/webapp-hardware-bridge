@@ -239,6 +239,21 @@ public final class PrintJobReplayGuard {
         persistDurableStates(now);
     }
 
+    public void requireReconciliation(String rawId, PrintResult result) {
+        String id = normalizeId(rawId);
+        if (id == null) return;
+        long now = clock.millis();
+        AtomicBoolean completedInFlight = new AtomicBoolean();
+        entries.compute(id, (ignored, current) -> {
+            completedInFlight.set(current != null && current.state == State.PRINTING);
+            return Entry.reconcile(copyResult(result, id), now);
+        });
+        releaseInFlight(completedInFlight.get());
+        releaseSuccessReservation(completedInFlight.get());
+        // Retain the reconciliation reservation until an operator has checked physical output.
+        persistDurableStates(now);
+    }
+
     public void fail(String rawId) {
         String id = normalizeId(rawId);
         if (id == null) {

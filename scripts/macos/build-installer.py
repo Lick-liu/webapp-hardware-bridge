@@ -44,7 +44,8 @@ def main(arch):
     required_suites = ['PrintServiceDiscoveryServiceTest', 'PrinterMappingServiceTest',
                        'VirtualPdfPrinterSupportTest', 'LocalPrintDeviceContextServiceTest',
                        'PrintJobReplayGuardTest', 'PrinterWebSocketServiceIdempotencyTest',
-                       'TrustedOriginPolicyTest', 'HelperSecurityContractTest', 'ReleaseVersionContractTest']
+                       'TrustedOriginPolicyTest', 'HelperSecurityContractTest', 'ReleaseVersionContractTest',
+                       'MacRawPrinterTest']
     run('gradle', '--no-daemon', '--console=plain', '-I', 'scripts/macos/package.gradle',
         'stageMacInstaller', 'test', *[arg for suite in required_suites for arg in ('--tests', '*' + suite)])
     tests = [ET.parse(p).getroot() for p in (ROOT / 'build/test-results/test').glob('TEST-*.xml')]
@@ -59,7 +60,8 @@ def main(arch):
     classes = BUILD / 'launcher-classes'
     classes.mkdir()
     run(jdk / 'javac', '--release', '17', '-encoding', 'UTF-8', '-cp', str(staged / '*'),
-        '-d', classes, 'scripts/macos/MacLauncher.java', 'scripts/macos/MacProtocolProbe.java')
+        '-d', classes, 'scripts/macos/MacLauncher.java', 'scripts/macos/MacProtocolProbe.java',
+        'scripts/macos/MacRawTransportProbe.java')
     run(jdk / 'jar', '--create', '--file', staged / 'mac-launcher.jar', '-C', classes, '.')
     shutil.copyfile(ROOT / 'LICENSE', staged / 'LICENSE')
     run(jdk / 'jlink', '--output', BUILD / 'runtime', '--add-modules',
@@ -94,6 +96,14 @@ def main(arch):
     smoke_installed = run(installed / 'Contents/MacOS' / APP_NAME, '--smoke-test', timeout=150)
     assert 'MAC_APP_SMOKE_PASS' in smoke_installed and 'restart=true' in smoke_installed
     (EVIDENCE / 'pkg-payload-startup.txt').write_text(smoke_installed)
+    raw_work = BUILD / 'raw-probe-data'
+    raw_work.mkdir()
+    raw_probe = subprocess.run([str(installed / 'Contents/runtime/Contents/Home/bin/java'),
+        '-cp', str(installed / 'Contents/app/*'), 'cn.teahouses.printhelper.MacRawTransportProbe'],
+        cwd=raw_work, text=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, timeout=150)
+    (EVIDENCE / 'pkg-raw-transport.txt').write_text(raw_probe.stdout)
+    print(raw_probe.stdout, flush=True)
+    assert raw_probe.returncode == 0 and 'MAC_CUPS_RAW_BYTES_PASS' in raw_probe.stdout
     with (installed / 'Contents/Info.plist').open('rb') as f:
         info = plistlib.load(f)
     assert info['CFBundleIdentifier'] == 'cn.teahouses.printhelper'
@@ -102,6 +112,7 @@ def main(arch):
     manifest = {'sourceCommit': source, 'architecture': arch, 'version': version, 'unitTests': test_count,
                 'requiredProtocolBaseline': '7e3a108', 'nativeAppSmoke': 'PASS', 'pkgPayloadAppSmoke': 'PASS',
                 'identityActivationCorsRestartWebSocketSmoke': 'PASS',
+                'cupsRawProductionDispatchBytes': 'PASS',
                 'developerIdSigned': False, 'notarized': False, 'physicalPrintTested': False,
                 'artifacts': {pkg.name: {'bytes': pkg.stat().st_size, 'sha256': sha(pkg)}}}
     (installers / 'manifest.json').write_text(json.dumps(manifest, indent=2) + '\n')
