@@ -19,6 +19,7 @@ import tigerworkshop.webapphardwarebridge.services.ConfigService;
 import tigerworkshop.webapphardwarebridge.services.DocumentService;
 import tigerworkshop.webapphardwarebridge.services.PrintServiceDiscoveryService;
 import tigerworkshop.webapphardwarebridge.services.PrinterMappingService;
+import tigerworkshop.webapphardwarebridge.services.PrintJobReplayGuard;
 import tigerworkshop.webapphardwarebridge.services.VirtualPdfPrinterSupport;
 import tigerworkshop.webapphardwarebridge.utils.AnnotatedPrintable;
 import tigerworkshop.webapphardwarebridge.utils.ImagePrintable;
@@ -38,8 +39,22 @@ public class PrinterWebSocketService implements WebSocketServiceInterface {
     private static final DocumentService documentService = DocumentService.getInstance();
     private static final PrintServiceDiscoveryService printServiceDiscoveryService = PrintServiceDiscoveryService.getInstance();
     private static final ObjectMapper objectMapper = new ObjectMapper();
-    
+
+    private final PrintJobReplayGuard replayGuard;
+    private final PrintExecutor printExecutor;
+
+    @FunctionalInterface
+    interface PrintExecutor {
+        PrintResult execute(PrintDocument printDocument) throws Exception;
+    }
+
     public PrinterWebSocketService() {
+        this(PrintJobReplayGuard.getInstance(), null);
+    }
+
+    PrinterWebSocketService(PrintJobReplayGuard replayGuard, PrintExecutor printExecutor) {
+        this.replayGuard = replayGuard;
+        this.printExecutor = printExecutor == null ? this::executePrintDocument : printExecutor;
         log.info("Starting PrinterWebSocketService");
     }
 
@@ -87,6 +102,77 @@ public class PrinterWebSocketService implements WebSocketServiceInterface {
      * Prints a PrintDocument
      */
     public void printDocument(PrintDocument printDocument) throws Exception {
+        PrintJobReplayGuard.Decision decision = replayGuard.begin(printDocument.getId());
+        if (decision.action() == PrintJobReplayGuard.Action.IN_PROGRESS) {
+            log.info("Ignoring concurrent replay for print job id={}; original execution is still running",
+                    printDocument.getId());
+            return;
+        }
+        if (decision.action() == PrintJobReplayGuard.Action.REPLAY_SUCCESS) {
+            log.info("Replaying cached success for print job id={}", printDocument.getId());
+            sendPrintResult(decision.cachedResult());
+            return;
+        }
+        if (decision.action() == PrintJobReplayGuard.Action.REPLAY_RECONCILE) {
+            log.warn("Print job id={} requires manual reconciliation after helper restart", printDocument.getId());
+            sendPrintResult(decision.cachedResult());
+            return;
+        }
+        if (decision.action() == PrintJobReplayGuard.Action.REJECT_INVALID_ID) {
+            log.warn("Rejecting print job because its stable id exceeds {} characters",
+                    PrintJobReplayGuard.MAX_STABLE_JOB_ID_LENGTH);
+            sendPrintResult(new PrintResult(
+                    false,
+                    "本地打印任务 ID 过长，已在物理打印前拒绝任务",
+                    printDocument.getId(),
+                    null
+            ));
+            return;
+        }
+        if (decision.action() == PrintJobReplayGuard.Action.REJECT_PERSISTENCE) {
+            log.error("Rejecting print job id={} because durable replay state is unavailable", printDocument.getId());
+            sendPrintResult(new PrintResult(
+                    false,
+                    "本地打印助手无法安全保存防重状态，已在物理打印前拒绝任务",
+                    printDocument.getId(),
+                    null
+            ));
+            return;
+        }
+        if (decision.action() == PrintJobReplayGuard.Action.REJECT_CAPACITY) {
+            log.warn("Rejecting print job id={} because the in-flight replay gate is full", printDocument.getId());
+            sendPrintResult(new PrintResult(
+                    false,
+                    "本地打印助手正在处理过多未完成任务，请稍后重试",
+                    printDocument.getId(),
+                    null
+            ));
+            return;
+        }
+
+        PrintResult result;
+        try {
+            result = printExecutor.execute(printDocument);
+        } catch (Exception exception) {
+            log.error("Unexpected print executor failure for id={}", printDocument.getId(), exception);
+            result = new PrintResult(false, exception.getMessage(), printDocument.getId(), null);
+        }
+
+        if (decision.action() == PrintJobReplayGuard.Action.EXECUTE) {
+            if (Boolean.TRUE.equals(result.success)) {
+                replayGuard.succeed(printDocument.getId(), result);
+            } else {
+                replayGuard.fail(printDocument.getId());
+            }
+        }
+        sendPrintResult(result);
+    }
+
+    private void sendPrintResult(PrintResult result) throws Exception {
+        server.messageToServer(getChannel(), objectMapper.writeValueAsString(result));
+    }
+
+    private PrintResult executePrintDocument(PrintDocument printDocument) throws Exception {
         log.info("Printing Document {}, {}", printDocument.getType(), printDocument.getUrl());
 
         PrinterSearchResult printerSearchResult = null;
@@ -105,7 +191,7 @@ public class PrinterWebSocketService implements WebSocketServiceInterface {
                 throw new Exception("Unknown file type: " + printDocument.getUrl());
             }
 
-            server.messageToServer(getChannel(), objectMapper.writeValueAsString(new PrintResult(true, "Success", printDocument.getId(), printerSearchResult.getName())));
+            return new PrintResult(true, "Success", printDocument.getId(), printerSearchResult.getName());
         } catch (Exception e) {
             String errorMessage = e.getMessage();
 
@@ -122,7 +208,7 @@ public class PrinterWebSocketService implements WebSocketServiceInterface {
 
             server.messageToService("/notification", objectMapper.writeValueAsString(new NotificationDTO("ERROR", "Print Error " + printDocument.getType(), errorMessage)));
 
-            server.messageToServer(getChannel(), objectMapper.writeValueAsString(new PrintResult(false, errorMessage, printDocument.getId(), printerSearchResult != null ? printerSearchResult.getName() : null)));
+            return new PrintResult(false, errorMessage, printDocument.getId(), printerSearchResult != null ? printerSearchResult.getName() : null);
         }
     }
 

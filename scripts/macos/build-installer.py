@@ -6,6 +6,7 @@ import os
 from pathlib import Path
 import platform
 import plistlib
+import re
 import shutil
 import subprocess
 import xml.etree.ElementTree as ET
@@ -36,13 +37,20 @@ def sha(path):
 
 def main(arch):
     assert platform.system() == 'Darwin' and platform.machine() == arch
+    run('git', 'merge-base', '--is-ancestor', '7e3a108', 'HEAD')
+    version = re.search(r"(?m)^version '([^']+)'$", (ROOT / 'build.gradle').read_text()).group(1)
     assert not BUILD.exists(), 'Use a fresh build directory; do not overwrite prior evidence'
     EVIDENCE.mkdir(parents=True)
+    required_suites = ['PrintServiceDiscoveryServiceTest', 'PrinterMappingServiceTest',
+                       'VirtualPdfPrinterSupportTest', 'LocalPrintDeviceContextServiceTest',
+                       'PrintJobReplayGuardTest', 'PrinterWebSocketServiceIdempotencyTest',
+                       'TrustedOriginPolicyTest', 'HelperSecurityContractTest', 'ReleaseVersionContractTest']
     run('gradle', '--no-daemon', '--console=plain', '-I', 'scripts/macos/package.gradle',
-        'stageMacInstaller', 'test', '--tests', '*PrintServiceDiscoveryServiceTest',
-        '--tests', '*PrinterMappingServiceTest', '--tests', '*VirtualPdfPrinterSupportTest')
+        'stageMacInstaller', 'test', *[arg for suite in required_suites for arg in ('--tests', '*' + suite)])
     tests = [ET.parse(p).getroot() for p in (ROOT / 'build/test-results/test').glob('TEST-*.xml')]
-    assert sum(int(t.attrib['tests']) for t in tests) == 13
+    assert set(required_suites) <= {t.attrib['name'].split('.')[-1] for t in tests}
+    test_count = sum(int(t.attrib['tests']) for t in tests)
+    assert test_count > 13
     assert all(int(t.attrib[k]) == 0 for t in tests for k in ('failures', 'errors', 'skipped'))
     jdk = Path(os.environ['JAVA_HOME']) / 'bin'
     staged = BUILD / 'input'
@@ -51,13 +59,13 @@ def main(arch):
     classes = BUILD / 'launcher-classes'
     classes.mkdir()
     run(jdk / 'javac', '--release', '17', '-encoding', 'UTF-8', '-cp', str(staged / '*'),
-        '-d', classes, 'scripts/macos/MacLauncher.java')
+        '-d', classes, 'scripts/macos/MacLauncher.java', 'scripts/macos/MacProtocolProbe.java')
     run(jdk / 'jar', '--create', '--file', staged / 'mac-launcher.jar', '-C', classes, '.')
     shutil.copyfile(ROOT / 'LICENSE', staged / 'LICENSE')
     run(jdk / 'jlink', '--output', BUILD / 'runtime', '--add-modules',
         'java.se,jdk.unsupported,jdk.crypto.ec,jdk.charsets,jdk.zipfs',
         '--strip-debug', '--no-header-files', '--no-man-pages')
-    run(jdk / 'jpackage', '--type', 'app-image', '--name', APP_NAME, '--app-version', '1.2.0',
+    run(jdk / 'jpackage', '--type', 'app-image', '--name', APP_NAME, '--app-version', version,
         '--input', staged, '--main-jar', 'mac-launcher.jar', '--main-class', 'cn.teahouses.printhelper.MacLauncher',
         '--runtime-image', BUILD / 'runtime', '--dest', BUILD / 'app',
         '--mac-package-identifier', 'cn.teahouses.printhelper', '--vendor', '茶坊村')
@@ -65,51 +73,42 @@ def main(arch):
     launcher = app / 'Contents/MacOS' / APP_NAME
     assert arch in run('lipo', '-archs', launcher)
     assert arch in run('lipo', '-archs', app / 'Contents/runtime/Contents/Home/bin/java')
-    smoke = run(launcher, '--smoke-test', timeout=90)
-    assert 'MAC_APP_SMOKE_PASS' in smoke
+    smoke = run(launcher, '--smoke-test', timeout=150)
+    assert 'MAC_APP_SMOKE_PASS' in smoke and 'restart=true' in smoke and 'MAC_WEB_PROTOCOL_PASS' in smoke
     (EVIDENCE / 'app-startup.txt').write_text(smoke)
     installers = BUILD / 'installers'
-    for kind in ('dmg', 'pkg'):
-        run(jdk / 'jpackage', '--type', kind, '--name', APP_NAME, '--app-image', app,
-            '--app-version', '1.2.0', '--dest', installers, '--vendor', '茶坊村')
-    dmg = next(installers.glob('*.dmg'))
+    run(jdk / 'jpackage', '--type', 'pkg', '--name', APP_NAME, '--app-image', app,
+        '--app-version', version, '--dest', installers, '--vendor', '茶坊村')
     pkg = next(installers.glob('*.pkg'))
     label = 'apple-silicon' if arch == 'arm64' else 'intel'
-    dmg = dmg.rename(installers / f'tea-print-helper-macos-{label}.dmg')
-    pkg = pkg.rename(installers / f'tea-print-helper-macos-{label}.pkg')
-    (EVIDENCE / 'dmg-verify.txt').write_text(run('hdiutil', 'verify', dmg))
-    mount = BUILD / 'mounted installer'
-    mount.mkdir()
-    run('hdiutil', 'attach', '-readonly', '-nobrowse', '-mountpoint', mount, dmg)
-    try:
-        mounted_app = mount / (APP_NAME + '.app')
-        assert mounted_app.is_dir()
-        installed = BUILD / 'Installed Applications' / (APP_NAME + '.app')
-        installed.parent.mkdir()
-        run('ditto', mounted_app, installed)
-        smoke_installed = run(installed / 'Contents/MacOS' / APP_NAME, '--smoke-test', timeout=90)
-        assert 'MAC_APP_SMOKE_PASS' in smoke_installed
-        (EVIDENCE / 'installed-app-startup.txt').write_text(smoke_installed)
-        with (installed / 'Contents/Info.plist').open('rb') as f:
-            info = plistlib.load(f)
-        assert info['CFBundleIdentifier'] == 'cn.teahouses.printhelper'
-    finally:
-        run('hdiutil', 'detach', mount)
+    pkg = pkg.rename(installers / f'tea-print-helper-{version}-macos-{label}.pkg')
     expanded = BUILD / 'pkg-expanded'
-    run('pkgutil', '--expand', pkg, expanded)
+    run('pkgutil', '--expand-full', pkg, expanded)
     assert (expanded / 'Distribution').exists()
     (EVIDENCE / 'pkg-distribution.xml').write_bytes((expanded / 'Distribution').read_bytes())
+    payload_apps = list(expanded.rglob(APP_NAME + '.app'))
+    assert len(payload_apps) == 1, 'Expected one app in the actual PKG payload'
+    installed = BUILD / 'Installed Applications' / (APP_NAME + '.app')
+    installed.parent.mkdir()
+    run('ditto', payload_apps[0], installed)
+    smoke_installed = run(installed / 'Contents/MacOS' / APP_NAME, '--smoke-test', timeout=150)
+    assert 'MAC_APP_SMOKE_PASS' in smoke_installed and 'restart=true' in smoke_installed
+    (EVIDENCE / 'pkg-payload-startup.txt').write_text(smoke_installed)
+    with (installed / 'Contents/Info.plist').open('rb') as f:
+        info = plistlib.load(f)
+    assert info['CFBundleIdentifier'] == 'cn.teahouses.printhelper'
+    assert info['CFBundleShortVersionString'] == version
     source = run('git', 'rev-parse', 'HEAD').strip()
-    manifest = {'sourceCommit': source, 'architecture': arch, 'unitTests': 13,
-                'nativeAppSmoke': 'PASS', 'mountedDmgInstalledAppSmoke': 'PASS',
+    manifest = {'sourceCommit': source, 'architecture': arch, 'version': version, 'unitTests': test_count,
+                'requiredProtocolBaseline': '7e3a108', 'nativeAppSmoke': 'PASS', 'pkgPayloadAppSmoke': 'PASS',
+                'identityActivationCorsRestartWebSocketSmoke': 'PASS',
                 'developerIdSigned': False, 'notarized': False, 'physicalPrintTested': False,
-                'artifacts': {p.name: {'bytes': p.stat().st_size, 'sha256': sha(p)} for p in (dmg, pkg)}}
+                'artifacts': {pkg.name: {'bytes': pkg.stat().st_size, 'sha256': sha(pkg)}}}
     (installers / 'manifest.json').write_text(json.dumps(manifest, indent=2) + '\n')
-    (installers / 'SHA256SUMS.txt').write_text(''.join(f'{sha(p)}  {p.name}\n' for p in (dmg, pkg)))
+    (installers / 'SHA256SUMS.txt').write_text(f'{sha(pkg)}  {pkg.name}\n')
     (installers / 'README.txt').write_text(
         '茶坊村打印助手 macOS 安装包\n\n'
-        '推荐：打开 DMG，将 Tea Print Helper 拖到 Applications，再从“应用程序”双击启动。\n'
-        '也可选择 PKG，按安装向导操作。两种方式任选一种。无需另装 Java，无需打开终端。\n'
+        '双击 PKG，按安装向导操作。无需另装 Java，无需打开终端。\n'
         '启动后自动打开配置页 http://127.0.0.1:12212/；顶部状态栏图标菜单提供 Web UI 和 Exit。\n'
         '配置和日志：~/Library/Application Support/TeaPrintHelper。旧便携包数据不自动迁移。\n'
         '尚未进行 Apple Developer ID 签名/公证。系统若阻止运行，请核验来源后按单项安全提示处理；勿关闭系统保护。\n'

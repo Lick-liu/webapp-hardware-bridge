@@ -9,6 +9,7 @@ import lombok.NoArgsConstructor;
 
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
+import java.util.List;
 
 @Data
 @NoArgsConstructor
@@ -41,6 +42,12 @@ public class Config {
         private String address = "127.0.0.1";
         private String bind = "127.0.0.1";
         private int port = 12212;
+        private ArrayList<String> allowedOrigins = new ArrayList<>(List.of(
+                "https://dev.teahouses.cn",
+                "https://test.teahouses.cn",
+                "https://shop.teahouses.cn",
+                "http://localhost:3333",
+                "http://127.0.0.1:3333"));
         private Authentication authentication = new Authentication();
         private TLS tls = new TLS();
 

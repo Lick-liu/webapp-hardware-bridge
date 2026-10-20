@@ -45,6 +45,12 @@ public final class MacLauncher {
         Path data = smoke ? Files.createTempDirectory("tea-print-helper-smoke-")
                 : Path.of(System.getProperty("user.home"), "Library", "Application Support", "TeaPrintHelper");
         Files.createDirectories(data.resolve("log"));
+        if (smoke) {
+            // Avoid the production port and use only fresh, isolated test configuration.
+            try (ServerSocket available = new ServerSocket(0, 1, InetAddress.getByName("127.0.0.1"))) {
+                Files.writeString(data.resolve("config.json"), "{\"server\":{\"port\":" + available.getLocalPort() + "}}");
+            }
+        }
         JsonNode config = Files.exists(data.resolve("config.json"))
                 ? new ObjectMapper().readTree(data.resolve("config.json").toFile())
                 : new ObjectMapper().createObjectNode();
@@ -65,6 +71,8 @@ public final class MacLauncher {
             String classpath = Arrays.stream(System.getProperty("java.class.path").split(File.pathSeparator))
                     .map(p -> Path.of(p).toAbsolutePath().toString()).collect(Collectors.joining(File.pathSeparator));
             Path java = Path.of(System.getProperty("java.home"), "bin", "java");
+            String expectedDeviceId = null;
+            for (int attempt = 0; attempt < (smoke ? 2 : 1); attempt++) {
             Process child = new ProcessBuilder(java.toString(), "-cp", classpath,
                     "tigerworkshop.webapphardwarebridge." + (smoke ? "Server" : "GUI"))
                     .directory(data.toFile()).redirectErrorStream(true)
@@ -96,7 +104,8 @@ public final class MacLauncher {
                         } finally { connection.disconnect(); }
                     }
                     if (!Files.isRegularFile(data.resolve("config.json"))) throw new IllegalStateException("User config missing");
-                    System.out.println("MAC_APP_SMOKE_PASS data=" + data);
+                    expectedDeviceId = new MacProtocolProbe(settings).verify(expectedDeviceId);
+                    if (!Files.isRegularFile(data.resolve("local-print-device-context.json"))) throw new IllegalStateException("Device identity was not persisted");
                 } else {
                     Desktop.getDesktop().browse(settings);
                     int exit = child.waitFor();
@@ -108,6 +117,8 @@ public final class MacLauncher {
                 if (!child.waitFor(10, TimeUnit.SECONDS)) child.destroyForcibly();
                 Runtime.getRuntime().removeShutdownHook(shutdown);
             }
+            }
+            if (smoke) System.out.println("MAC_APP_SMOKE_PASS data=" + data);
         }
     }
 }
