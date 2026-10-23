@@ -10,6 +10,7 @@ import java.nio.file.Path;
 import java.time.Duration;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicReference;
 import static org.junit.Assert.*;
 
 public class MacRawPrinterTest {
@@ -56,6 +57,80 @@ public class MacRawPrinterTest {
         assertThrows(MacRawPrinter.SubmissionUnknownException.class, () -> new MacRawPrinter((args, timeout) -> {
             throw new MacRawPrinter.SubmissionUnknownException("timeout");
         }).submit(printer("ipp://localhost/printers/XP58"), new byte[]{1}));
+    }
+
+    @Test public void selectedPos58QueueUsesOnePdfDocumentSubmissionAndDeletesOwnFile() throws Exception {
+        AtomicInteger calls = new AtomicInteger();
+        AtomicInteger validated = new AtomicInteger();
+        AtomicReference<Path> spool = new AtomicReference<>();
+        new MacRawPrinter((args, timeout) -> {
+            calls.incrementAndGet();
+            assertFalse(args.contains("raw"));
+            assertTrue(args.contains("media=Custom.136x30.857142857pt"));
+            assertTrue(args.contains("DocCutType=1PartialCutDoc"));
+            assertEquals("1", args.get(args.indexOf("-#") + 1));
+            Path file = Path.of(args.get(args.size() - 1));
+            spool.set(file);
+            assertTrue(file.toString().endsWith(".pdf"));
+            assertTrue(new String(Files.readAllBytes(file), java.nio.charset.StandardCharsets.ISO_8859_1).startsWith("%PDF-1.4"));
+            return 0;
+        }, "XP58", queue -> validated.incrementAndGet())
+                .submit(printer("ipp://localhost/printers/XP58"), MacPos58RasterDocumentTest.receipt(true));
+        assertEquals(1, calls.get());
+        assertEquals(1, validated.get());
+        assertFalse(Files.exists(spool.get()));
+    }
+
+    @Test public void defaultOtherQueueAndNativeTextKeepOriginalRawBytes() throws Exception {
+        byte[] raster = MacPos58RasterDocumentTest.receipt(false);
+        for (String selected : new String[]{"", "another_queue"}) {
+            new MacRawPrinter((args, timeout) -> {
+                assertTrue(args.contains("raw"));
+                assertArrayEquals(raster, Files.readAllBytes(Path.of(args.get(args.size() - 1))));
+                return 0;
+            }, selected, queue -> fail("Unselected queue must not validate driver"))
+                    .submit(printer("ipp://localhost/printers/XP58"), raster);
+        }
+        byte[] nativeText = {0x1b, 0x40, 65, 10};
+        new MacRawPrinter((args, timeout) -> {
+            assertTrue(args.contains("raw"));
+            assertArrayEquals(nativeText, Files.readAllBytes(Path.of(args.get(args.size() - 1))));
+            return 0;
+        }, "XP58", queue -> fail("Native text must not use raster profile"))
+                .submit(printer("ipp://localhost/printers/XP58"), nativeText);
+    }
+
+    @Test public void manualTearSkipsOnlyDriverCutFeedForSelectedRasterQueue() throws Exception {
+        AtomicInteger calls = new AtomicInteger();
+        new MacRawPrinter((args, timeout) -> {
+            calls.incrementAndGet();
+            assertFalse(args.contains("raw"));
+            assertTrue(args.contains("DocCutType=0NoCutDoc"));
+            assertFalse(args.contains("DocCutType=1PartialCutDoc"));
+            assertTrue(args.contains("FeedCutAfterJobEnd=0None"));
+            assertEquals("1", args.get(args.indexOf("-#") + 1));
+            return 0;
+        }, "XP58", queue -> {}, true)
+                .submit(printer("ipp://localhost/printers/XP58"), MacPos58RasterDocumentTest.receipt(true));
+        assertEquals(1, calls.get());
+    }
+
+    @Test public void driverValidationAndMalformedRasterFailBeforeSubmission() throws Exception {
+        MacRawPrinter.CommandRunner forbidden = (args, timeout) -> { fail("Must not submit"); return 0; };
+        byte[] receipt = MacPos58RasterDocumentTest.receipt(false);
+        assertThrows(Exception.class, () -> new MacRawPrinter(forbidden, "XP58", queue -> {
+            throw new javax.print.PrintException("Wrong driver");
+        }).submit(printer("ipp://localhost/printers/XP58"), receipt));
+        assertThrows(Exception.class, () -> new MacRawPrinter(forbidden, "XP58", queue -> {})
+                .submit(printer("ipp://localhost/printers/XP58"), java.util.Arrays.copyOf(receipt, receipt.length - 1)));
+    }
+
+    @Test public void driverSubmissionFailureNeverFallsBackOrRetries() throws Exception {
+        AtomicInteger calls = new AtomicInteger();
+        assertThrows(MacRawPrinter.SubmissionUnknownException.class,
+                () -> new MacRawPrinter((args, timeout) -> { calls.incrementAndGet(); return 1; }, "XP58", queue -> {})
+                        .submit(printer("ipp://localhost/printers/XP58"), MacPos58RasterDocumentTest.receipt(true)));
+        assertEquals(1, calls.get());
     }
 
     @Test public void processRunnerReportsExitAndBoundsWaiting() throws Exception {

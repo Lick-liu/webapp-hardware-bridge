@@ -16,12 +16,30 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardOpenOption;
 import java.util.Arrays;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 import javax.swing.JOptionPane;
 
 /** A native app must keep writable data outside its signed/read-only bundle. */
 public final class MacLauncher {
+    static List<String> childCommand(String java, String classpath, boolean smoke) {
+        List<String> command = new ArrayList<>();
+        command.add(java);
+        // jpackage options configure this launcher, not the child JVM doing the printing.
+        // Forward only the explicit per-queue compatibility opt-in, never arbitrary flags.
+        String queue = System.getProperty("tea.print.macPos58RasterQueue", "");
+        if (!queue.isBlank()) {
+            command.add("-Dtea.print.macPos58RasterQueue=" + queue);
+            if (Boolean.getBoolean("tea.print.macPos58ManualTear"))
+                command.add("-Dtea.print.macPos58ManualTear=true");
+        }
+        command.addAll(List.of("-cp", classpath,
+                "tigerworkshop.webapphardwarebridge." + (smoke ? "Server" : "GUI")));
+        return command;
+    }
+
     public static void main(String[] args) {
         boolean smoke = Arrays.asList(args).contains("--smoke-test");
         try {
@@ -73,8 +91,7 @@ public final class MacLauncher {
             Path java = Path.of(System.getProperty("java.home"), "bin", "java");
             String expectedDeviceId = null;
             for (int attempt = 0; attempt < (smoke ? 2 : 1); attempt++) {
-            Process child = new ProcessBuilder(java.toString(), "-cp", classpath,
-                    "tigerworkshop.webapphardwarebridge." + (smoke ? "Server" : "GUI"))
+            Process child = new ProcessBuilder(childCommand(java.toString(), classpath, smoke))
                     .directory(data.toFile()).redirectErrorStream(true)
                     .redirectOutput(ProcessBuilder.Redirect.appendTo(data.resolve("log/launcher-console.log").toFile()))
                     .start();
