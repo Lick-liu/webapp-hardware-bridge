@@ -20,6 +20,8 @@ def main():
     parser.add_argument('--delivery', required=True, type=Path,
                         help='Extracted TeaPrintHelper-XP58-local-20261021 directory')
     parser.add_argument('--output', required=True, type=Path, help='New evidence directory')
+    parser.add_argument('--java', type=Path,
+                        help='Native host Java for testing the same portable JARs on another architecture')
     args = parser.parse_args()
     delivery = args.delivery.resolve()
     output = args.output.resolve()
@@ -32,7 +34,7 @@ def main():
         if hashlib.sha256(path.read_bytes()).hexdigest() != digest:
             raise ValueError('Delivery checksum mismatch: ' + relative)
     app = delivery / 'app/Tea Print Helper.app/Contents'
-    java = app / 'runtime/Contents/Home/bin/java'
+    java = args.java.resolve() if args.java else app / 'runtime/Contents/Home/bin/java'
     tools = delivery / 'build-tools'
     libraries = sorted(p for p in (app / 'app').glob('*.jar')
                        if p.name not in ('webapp-hardware-bridge.jar', 'mac-launcher.jar'))

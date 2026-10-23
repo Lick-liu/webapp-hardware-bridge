@@ -1,0 +1,68 @@
+name: XP58 Intel macOS PKG
+
+on:
+  push:
+    branches: [codex/20261023-xp58-archive-delivery]
+    paths:
+      - '.github/workflows/macos-xp58-intel-installer.yml'
+      - 'scripts/macos/package-accepted-xp58.py'
+      - 'scripts/macos/test-local.py'
+
+permissions:
+  contents: read
+
+jobs:
+  package:
+    runs-on: macos-15-intel
+    timeout-minutes: 20
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+      - uses: actions/setup-java@cf277c60eb25467037889841efdb72551f06f6c3
+        with:
+          distribution: temurin
+          java-version: '21'
+          architecture: x64
+      - name: Build and verify native Intel installer
+        run: python3 scripts/macos/package-accepted-xp58.py --architecture x86_64
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: tea-print-helper-xp58-macos-intel-pkg
+          path: |
+            build/accepted-xp58-installer-intel/installers/*
+            build/accepted-xp58-installer-intel/evidence/*
+          if-no-files-found: error
+          retention-days: 30
+      - name: Publish direct Intel PKG download
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          python3 - <<'PY'
+          import hashlib, json, os
+          from pathlib import Path
+          root = Path('build/accepted-xp58-installer-intel/installers')
+          m = json.loads((root / 'manifest.json').read_text())
+          package = root / 'tea-print-helper-1.3.2-xp58-manual-tear-macos-intel.pkg'
+          assert m['sourceCommit'] == os.environ['GITHUB_SHA']
+          assert m['architecture'] == 'x86_64' and m['unitTests'] == 74
+          assert m['classBytesEqualToAccepted'] == 70 and m['payloadByteIdentical']
+          assert m['nativeAppSmoke'] == m['pkgPayloadSmoke'] == 'PASS'
+          assert hashlib.sha256(package.read_bytes()).hexdigest() == m['sha256']
+          assert package.stat().st_size == m['bytes'] and package.read_bytes()[:4] == b'xar!'
+          Path('intel-release-notes.md').write_text('''Intel Mac 原生 PKG，内含 x86_64 Java 和启动器，复用 tea-harness 95165d4 中已验收的 XP58 Java JAR 原始字节。
+
+          先正常退出旧助手，再双击 PKG 安装到 /Applications/Tea Print Helper.app。保留现有配置、设备身份、防重缓存。仅适用于既有 Xprinter_USB_Printer_Port 队列及已核验的 POS-58 厂家驱动，保留 PDF 位图兼容和手撕纸开关。
+
+          Intel Mac CI：74 项测试通过，70 个重编译 class 与原验收包一致，全部业务/依赖 JAR 字节一致，x86_64 launcher/Java 架构与签名完整性验证通过，实际 PKG payload 及原生 app 启动/Web协议/重启检查通过。
+
+          未重新进行实体打印或执行系统安装器；Intel 现场出纸仍需实机确认。未做 Apple Developer ID 签名/公证。安装器不含用户数据，不自动启动或打印。
+
+          SHA256: ''' + m['sha256'] + '\n')
+          PY
+          gh release create xp58-macos-intel-20261023 \
+            build/accepted-xp58-installer-intel/installers/* \
+            --target "$GITHUB_SHA" --prerelease --latest=false \
+            --title 'XP58 Mac 安装包 1.3.2 · Intel' --notes-file intel-release-notes.md
