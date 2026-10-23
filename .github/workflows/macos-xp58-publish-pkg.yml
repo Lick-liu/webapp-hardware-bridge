@@ -1,0 +1,64 @@
+name: Publish verified XP58 PKG
+
+on:
+  push:
+    branches: [codex/20261023-xp58-archive-delivery]
+    paths: ['.github/workflows/macos-xp58-publish-pkg.yml']
+
+permissions:
+  actions: read
+  contents: write
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      GH_TOKEN: ${{ github.token }}
+      GH_REPO: ${{ github.repository }}
+    steps:
+      - name: Fetch successful, immutable installer build
+        run: |
+          gh run view 39894199239 --json headSha,conclusion > run.json
+          python3 - <<'PY'
+          import json
+          run = json.load(open('run.json'))
+          assert run['headSha'] == 'c7e694b769b97ae5e473cb55d0fb87fd7900ee0b'
+          assert run['conclusion'] == 'success'
+          PY
+          gh run download 39894199239 --name tea-print-helper-xp58-macos-apple-silicon-pkg --dir artifact
+      - name: Verify actual PKG and publish direct download
+        run: |
+          python3 - <<'PY'
+          import hashlib, json
+          from pathlib import Path
+          root = Path('artifact/installers')
+          manifest = json.loads((root / 'manifest.json').read_text())
+          expected = '9775929807cbd873da12807622a47d0049721e83c743a888ff475682907d771d'
+          name = 'tea-print-helper-1.3.2-xp58-manual-tear-macos-apple-silicon.pkg'
+          package = root / name
+          assert manifest['sourceCommit'] == 'c7e694b769b97ae5e473cb55d0fb87fd7900ee0b'
+          assert manifest['package'] == name and manifest['sha256'] == expected
+          assert package.stat().st_size == manifest['bytes'] == 60744765
+          assert hashlib.sha256(package.read_bytes()).hexdigest() == expected
+          assert package.read_bytes()[:4] == b'xar!'
+          assert manifest['payloadByteIdentical'] and manifest['unitTests'] == 74
+          assert manifest['acceptedAppSmoke'] == manifest['pkgPayloadSmoke'] == 'PASS'
+          Path('release-notes.md').write_text('''Apple Silicon (M 系列) 原生 PKG 安装包，封装 tea-harness 95165d4 中已验收的 XP58 应用，内含 Java。
+
+          先正常退出旧助手，再双击 PKG 安装到 /Applications/Tea Print Helper.app。保留现有配置、设备身份和防重缓存；安装器不含用户数据，不自动启动或打印。
+
+          适用于既有 Xprinter_USB_Printer_Port 队列及已验收的 POS-58 厂家驱动。保留 PDF 位图兼容及手撕纸开关。Intel 不适用；未做 Apple Developer ID 签名/公证。
+
+          74 项测试通过，原应用及实际 PKG payload 启动/Web协议/重启检查通过；225 个应用文件/链接记录与已验收应用一致。本次没有重做实体打印或执行系统安装器。
+
+          CI: https://github.com/Lick-liu/webapp-hardware-bridge/actions/runs/39894199239
+          SHA256: ''' + expected + '\n')
+          print('VERIFIED_PKG ' + expected)
+          PY
+          gh release create xp58-macos-20261023 \
+            artifact/installers/tea-print-helper-1.3.2-xp58-manual-tear-macos-apple-silicon.pkg \
+            artifact/installers/SHA256SUMS artifact/installers/manifest.json \
+            --target c7e694b769b97ae5e473cb55d0fb87fd7900ee0b \
+            --title 'XP58 Mac 安装包 1.3.2 · Apple Silicon' \
+            --prerelease --latest=false --notes-file release-notes.md
