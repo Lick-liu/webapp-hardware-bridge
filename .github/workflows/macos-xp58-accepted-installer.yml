@@ -1,0 +1,29 @@
+name: Accepted XP58 macOS PKG
+
+on:
+  push:
+    branches: [codex/20261023-xp58-archive-delivery]
+    paths:
+      - '.github/workflows/macos-xp58-accepted-installer.yml'
+      - 'scripts/macos/package-accepted-xp58.py'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  package:
+    runs-on: macos-15
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - name: Package and verify accepted ARM64 application
+        run: python3 scripts/macos/package-accepted-xp58.py
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: tea-print-helper-xp58-macos-apple-silicon-pkg
+          path: |
+            build/accepted-xp58-installer/installers/*
+            build/accepted-xp58-installer/evidence/*
+          if-no-files-found: error
+          retention-days: 30
